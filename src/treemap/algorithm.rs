@@ -1,28 +1,28 @@
-use ratatui::style::Color;
-
 use super::node::{LayoutRect, TreemapItem, TreemapRect};
 
-pub fn squarify(items: &[TreemapItem], bounds: &LayoutRect) -> Vec<TreemapRect> {
+pub fn squarify_sorted(items: &[TreemapItem], bounds: &LayoutRect) -> Vec<TreemapRect> {
     if items.is_empty() || bounds.area() <= 0.0 {
         return Vec::new();
     }
 
-    let mut sorted: Vec<&TreemapItem> = items.iter().collect();
-    sorted.sort_by(|a, b| b.value.cmp(&a.value));
+    let sorted: Vec<&TreemapItem> = items.iter().collect();
+    squarify_sorted_refs(&sorted, bounds)
+}
 
+fn squarify_sorted_refs(sorted: &[&TreemapItem], bounds: &LayoutRect) -> Vec<TreemapRect> {
     let total_value: f64 = sorted.iter().map(|i| i.value as f64).sum();
     if total_value <= 0.0 {
         return Vec::new();
     }
 
     let total_area = bounds.area();
-    let mut results = Vec::with_capacity(items.len());
+    let mut results = Vec::with_capacity(sorted.len());
     let mut remaining = bounds.clone();
 
     let mut row: Vec<&TreemapItem> = Vec::new();
     let mut row_area = 0.0;
 
-    for item in &sorted {
+    for item in sorted {
         let item_area = (item.value as f64 / total_value) * total_area;
 
         if row.is_empty() {
@@ -115,7 +115,6 @@ fn layout_row(
                 id: item.id,
                 label: item.label.clone(),
                 value: item.value,
-                color: Color::DarkGray,
             });
 
             y += item_height;
@@ -136,7 +135,6 @@ fn layout_row(
                 id: item.id,
                 label: item.label.clone(),
                 value: item.value,
-                color: Color::DarkGray,
             });
 
             x += item_width;
@@ -151,9 +149,15 @@ fn layout_row(
 mod tests {
     use super::*;
 
+    fn squarify_for_tests(items: &[TreemapItem], bounds: &LayoutRect) -> Vec<TreemapRect> {
+        let mut sorted = items.to_vec();
+        sorted.sort_by(|a, b| b.value.cmp(&a.value));
+        squarify_sorted(&sorted, bounds)
+    }
+
     #[test]
     fn empty_input() {
-        let rects = squarify(&[], &LayoutRect::new(0.0, 0.0, 100.0, 100.0));
+        let rects = squarify_for_tests(&[], &LayoutRect::new(0.0, 0.0, 100.0, 100.0));
         assert!(rects.is_empty());
     }
 
@@ -165,7 +169,7 @@ mod tests {
             value: 100,
         }];
         let bounds = LayoutRect::new(0.0, 0.0, 80.0, 40.0);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         assert_eq!(rects.len(), 1);
         let r = &rects[0];
         assert!((r.rect.width * r.rect.height - 3200.0).abs() < 1.0);
@@ -186,7 +190,7 @@ mod tests {
             },
         ];
         let bounds = LayoutRect::new(0.0, 0.0, 100.0, 100.0);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         assert_eq!(rects.len(), 2);
         let total_area: f64 = rects.iter().map(|r| r.rect.area()).sum();
         assert!((total_area - 10000.0).abs() < 1.0);
@@ -206,7 +210,7 @@ mod tests {
             })
             .collect();
         let bounds = LayoutRect::new(0.0, 0.0, 120.0, 40.0);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         let total_area: f64 = rects.iter().map(|r| r.rect.area()).sum();
         assert!(
             (total_area - bounds.area()).abs() < 1.0,
@@ -225,7 +229,7 @@ mod tests {
             })
             .collect();
         let bounds = LayoutRect::new(0.0, 0.0, 120.0, 40.0);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         let eps = 0.01;
         for r in &rects {
             assert!(r.rect.x >= bounds.x - eps);

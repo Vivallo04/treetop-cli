@@ -1,18 +1,20 @@
 pub mod detail_panel;
 pub mod header;
 pub mod statusbar;
+pub mod theme;
 pub mod treemap_widget;
 
-use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout};
 
 use crate::app::App;
+use crate::ui::theme::colorize_rects;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Length(4),
             Constraint::Min(1),
             Constraint::Length(1),
         ])
@@ -33,21 +35,71 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         app.compute_layout(treemap_area.width, treemap_area.height);
 
         let rects = app.display_rects();
-        treemap_widget::render(frame, treemap_area, &rects, app.selected_index, app.min_rect_width, app.min_rect_height, &app.theme);
+        let colored = colorize_rects(
+            &rects,
+            &app.snapshot.process_tree,
+            app.snapshot.memory_total,
+            app.color_mode,
+            &app.theme,
+            app.color_support,
+        );
+        treemap_widget::render(
+            frame,
+            treemap_area,
+            &colored,
+            app.selected_index,
+            app.min_rect_width,
+            app.min_rect_height,
+            app.border_style,
+            &app.theme,
+        );
 
         if let Some(process) = app.selected_process() {
             let history = app.history.get(process.pid);
-            detail_panel::render(frame, detail_area, process, &app.theme, history);
+            detail_panel::render(
+                frame,
+                detail_area,
+                process,
+                &app.theme,
+                app.border_style,
+                history,
+            );
         }
     } else {
         app.treemap_area = Some(content_area);
         app.compute_layout(content_area.width, content_area.height);
         let rects = app.display_rects();
-        treemap_widget::render(frame, content_area, &rects, app.selected_index, app.min_rect_width, app.min_rect_height, &app.theme);
+        let colored = colorize_rects(
+            &rects,
+            &app.snapshot.process_tree,
+            app.snapshot.memory_total,
+            app.color_mode,
+            &app.theme,
+            app.color_support,
+        );
+        treemap_widget::render(
+            frame,
+            content_area,
+            &colored,
+            app.selected_index,
+            app.min_rect_width,
+            app.min_rect_height,
+            app.border_style,
+            &app.theme,
+        );
     }
 
     let breadcrumbs = app.zoom_breadcrumbs();
-    header::render(frame, chunks[0], &app.snapshot, app.color_mode, &app.theme, &breadcrumbs, &app.cpu_history);
+    header::render(
+        frame,
+        chunks[0],
+        &app.snapshot,
+        app.color_mode,
+        &app.theme,
+        app.border_style,
+        &breadcrumbs,
+        &app.cpu_history,
+    );
     statusbar::render(
         frame,
         chunks[2],
@@ -58,3 +110,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         app.is_zoomed(),
     );
 }
+
+#[cfg(test)]
+mod tests;

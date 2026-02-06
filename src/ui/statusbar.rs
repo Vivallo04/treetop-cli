@@ -1,11 +1,11 @@
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 
 use crate::app::InputMode;
-use crate::treemap::color::Theme;
+use crate::ui::theme::Theme;
 
 pub fn render(
     frame: &mut Frame,
@@ -47,10 +47,7 @@ pub fn render(
                     format!(" {filter_text}"),
                     Style::default().fg(theme.pill_desc_fg),
                 ),
-                Span::styled(
-                    "\u{2588}",
-                    Style::default().fg(theme.pill_key_bg),
-                ),
+                Span::styled("\u{2588}", Style::default().fg(theme.pill_key_bg)),
             ];
             spans.extend(pill_spans("Esc", "Cancel", theme));
             spans.extend(pill_spans("Enter", "Apply", theme));
@@ -64,10 +61,7 @@ pub fn render(
                         .fg(theme.pill_key_bg)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    filter_text,
-                    Style::default().fg(theme.pill_desc_fg),
-                ),
+                Span::styled(filter_text, Style::default().fg(theme.pill_desc_fg)),
             ];
             spans.extend(pill_spans("Esc", "Clear", theme));
             spans.extend(pill_spans("/", "Edit", theme));
@@ -105,9 +99,7 @@ fn pill_spans<'a>(key: &'a str, desc: &'a str, theme: &Theme) -> Vec<Span<'a>> {
         ),
         Span::styled(
             format!(" {desc}"),
-            Style::default()
-                .fg(theme.pill_desc_fg)
-                .bg(theme.surface_bg),
+            Style::default().fg(theme.pill_desc_fg).bg(theme.surface_bg),
         ),
     ]
 }

@@ -1,0 +1,21 @@
+---
+source: src/ui/tests.rs
+assertion_line: 145
+expression: output
+---
+╭ Process Detail ──────────────────────╮
+│ PID      1                           │
+│ PPID     0                           │
+│ Name     alpha                       │
+│ Cmd      alpha --flag                │
+│ Memory   190.7 MB                    │
+│ CPU      12.5%                       │
+│ User     user                        │
+│ Group    group                       │
+│ GroupNameN/A                         │
+│ Priority N/A                         │
+│ I/O      N/A                         │
+│ Status   Running                     │
+│ Children 0                           │
+│                                      │
+╰──────────────────────────────────────╯

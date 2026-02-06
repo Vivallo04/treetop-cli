@@ -1,0 +1,8 @@
+---
+source: src/ui/tests.rs
+assertion_line: 104
+expression: output
+---
+╭ TREETOP ─────────────────────╮╭ RAM Usage ───╮╭ SWAP Usage ──╮╭ CPU Activity ╮
+│ live  > alpha  Memory  Procs:││400/976 MB (41││61/488 MB (12%││   ▁▁         │
+╰──────────────────────────────╯╰──────────────╯╰──────────────╯╰──────────────╯

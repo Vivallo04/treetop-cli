@@ -9,7 +9,8 @@ pub enum Event {
     Key(KeyEvent),
     Mouse(MouseEvent),
     Tick,
-    Resize(u16, u16),
+    Animate,
+    Resize,
 }
 
 pub struct EventHandler {
@@ -24,6 +25,7 @@ impl EventHandler {
         let task = tokio::spawn(async move {
             let mut reader = event::EventStream::new();
             let mut tick_interval = tokio::time::interval(tick_rate);
+            let mut animate_interval = tokio::time::interval(Duration::from_millis(40));
 
             loop {
                 tokio::select! {
@@ -33,7 +35,7 @@ impl EventHandler {
                                 let mapped = match evt {
                                     CrosstermEvent::Key(key) => Some(Event::Key(key)),
                                     CrosstermEvent::Mouse(mouse) => Some(Event::Mouse(mouse)),
-                                    CrosstermEvent::Resize(w, h) => Some(Event::Resize(w, h)),
+                                    CrosstermEvent::Resize(_, _) => Some(Event::Resize),
                                     _ => None,
                                 };
                                 if let Some(e) = mapped
@@ -48,6 +50,11 @@ impl EventHandler {
                     }
                     _ = tick_interval.tick() => {
                         if tx.send(Event::Tick).is_err() {
+                            break;
+                        }
+                    }
+                    _ = animate_interval.tick() => {
+                        if tx.send(Event::Animate).is_err() {
                             break;
                         }
                     }

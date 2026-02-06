@@ -1,5 +1,3 @@
-use ratatui::style::Color;
-
 #[derive(Clone, Debug)]
 pub struct TreemapItem {
     pub id: u32,
@@ -50,7 +48,6 @@ pub struct TreemapRect {
     pub id: u32,
     pub label: String,
     pub value: u64,
-    pub color: Color,
 }
 
 #[cfg(test)]

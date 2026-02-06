@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::system::platform::IoStats;
+
 #[derive(Clone, Debug)]
 pub struct ProcessInfo {
     pub pid: u32,
@@ -12,30 +14,40 @@ pub struct ProcessInfo {
     pub group_id: Option<String>,
     pub status: String,
     pub children: Vec<u32>,
+    pub group_name: Option<String>,
+    pub priority: Option<i32>,
+    pub io_stats: Option<IoStats>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ProcessTree {
     pub processes: HashMap<u32, ProcessInfo>,
-    pub roots: Vec<u32>,
-    pub total_memory: u64,
+}
+
+pub fn build_process_tree_from_flat(processes: Vec<ProcessInfo>) -> ProcessTree {
+    let mut by_pid = HashMap::with_capacity(processes.len());
+    for mut process in processes {
+        // Build parent-child links from pid/ppid only.
+        process.children.clear();
+        by_pid.insert(process.pid, process);
+    }
+
+    let pids: Vec<u32> = by_pid.keys().copied().collect();
+    for pid in pids {
+        let ppid = by_pid.get(&pid).map(|p| p.ppid).unwrap_or(0);
+        if let Some(parent) = by_pid.get_mut(&ppid) {
+            parent.children.push(pid);
+        }
+    }
+
+    for process in by_pid.values_mut() {
+        process.children.sort_unstable();
+    }
+
+    ProcessTree { processes: by_pid }
 }
 
 impl ProcessTree {
-    /// Compute subtree memory: own memory + all descendants' memory.
-    pub fn subtree_memory(&self, pid: u32) -> u64 {
-        let Some(proc) = self.processes.get(&pid) else {
-            return 0;
-        };
-        let own = proc.memory_bytes;
-        let children_sum: u64 = proc
-            .children
-            .iter()
-            .map(|&child| self.subtree_memory(child))
-            .sum();
-        own + children_sum
-    }
-
     /// Compute subtree sizes for all processes, returned as a map.
     pub fn all_subtree_sizes(&self) -> HashMap<u32, u64> {
         let mut cache = HashMap::new();
@@ -69,10 +81,8 @@ mod tests {
     use super::*;
 
     fn build_tree() -> ProcessTree {
-        let mut processes = HashMap::new();
-        // Parent with 100 bytes, two children with 50 each, one grandchild with 25
-        processes.insert(
-            1,
+        let processes = vec![
+            // Parent with 100 bytes, two children with 50 each, one grandchild with 25
             ProcessInfo {
                 pid: 1,
                 ppid: 0,
@@ -83,11 +93,11 @@ mod tests {
                 user_id: None,
                 group_id: None,
                 status: "R".into(),
-                children: vec![2, 3],
+                children: vec![],
+                group_name: None,
+                priority: None,
+                io_stats: None,
             },
-        );
-        processes.insert(
-            2,
             ProcessInfo {
                 pid: 2,
                 ppid: 1,
@@ -98,11 +108,11 @@ mod tests {
                 user_id: None,
                 group_id: None,
                 status: "R".into(),
-                children: vec![4],
+                children: vec![],
+                group_name: None,
+                priority: None,
+                io_stats: None,
             },
-        );
-        processes.insert(
-            3,
             ProcessInfo {
                 pid: 3,
                 ppid: 1,
@@ -114,10 +124,10 @@ mod tests {
                 group_id: None,
                 status: "R".into(),
                 children: vec![],
+                group_name: None,
+                priority: None,
+                io_stats: None,
             },
-        );
-        processes.insert(
-            4,
             ProcessInfo {
                 pid: 4,
                 ppid: 2,
@@ -129,27 +139,12 @@ mod tests {
                 group_id: None,
                 status: "R".into(),
                 children: vec![],
+                group_name: None,
+                priority: None,
+                io_stats: None,
             },
-        );
-        ProcessTree {
-            processes,
-            roots: vec![1],
-            total_memory: 225,
-        }
-    }
-
-    #[test]
-    fn subtree_memory_leaf() {
-        let tree = build_tree();
-        assert_eq!(tree.subtree_memory(4), 25);
-        assert_eq!(tree.subtree_memory(3), 50);
-    }
-
-    #[test]
-    fn subtree_memory_with_children() {
-        let tree = build_tree();
-        assert_eq!(tree.subtree_memory(2), 75); // 50 + 25
-        assert_eq!(tree.subtree_memory(1), 225); // 100 + 50 + 50 + 25
+        ];
+        build_process_tree_from_flat(processes)
     }
 
     #[test]

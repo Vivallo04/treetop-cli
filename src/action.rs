@@ -21,7 +21,6 @@ pub enum Action {
     ToggleDetailPanel,
     ZoomIn,
     ZoomOut,
-    Refresh,
     SelectAt(u16, u16),
     None,
 }

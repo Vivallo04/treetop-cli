@@ -5,13 +5,15 @@ use ratatui::layout::Rect;
 
 use crate::action::{Action, Direction};
 use crate::config::Config;
+use crate::format::format_bytes;
 use crate::system::collector::Collector;
 use crate::system::history::HistoryStore;
-use crate::system::kill::{kill_process, KillResult};
+use crate::system::kill::{KillResult, kill_process};
 use crate::system::snapshot::SystemSnapshot;
-use crate::treemap::algorithm::squarify;
-use crate::treemap::color::{apply_color_mode, ColorMode, Theme};
 use crate::treemap::node::{LayoutRect, TreemapItem, TreemapRect};
+use crate::ui::theme::{
+    BorderStyle, ColorMode, ColorSupport, HeatOverrides, Theme, resolve_color_support,
+};
 use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +33,8 @@ pub struct App {
     pub show_detail_panel: bool,
     pub color_mode: ColorMode,
     pub theme: Theme,
+    pub color_support: ColorSupport,
+    pub border_style: BorderStyle,
     pub status_message: Option<(String, Instant)>,
     pub treemap_area: Option<Rect>,
     pub min_rect_width: u16,
@@ -39,6 +43,8 @@ pub struct App {
     pub history: HistoryStore,
     pub cpu_history: VecDeque<u64>,
     cpu_history_capacity: usize,
+    heat_overrides: HeatOverrides,
+    group_threshold: f64,
     subtree_sizes: HashMap<u32, u64>,
     prev_layout_rects: Vec<TreemapRect>,
     animation_frame: u8,
@@ -53,13 +59,20 @@ impl App {
         let snapshot = collector.refresh();
 
         let show_detail_panel = config.general.show_detail_panel;
-        let color_mode = ColorMode::from_str_config(&config.general.default_color_mode);
-        let theme = Theme::from_config(&config.colors.theme);
+        let color_support = resolve_color_support(&config.general.color_support);
+        let heat_overrides = HeatOverrides::from_config(&config.colors);
+        let mut color_mode = ColorMode::from_str_config(&config.general.default_color_mode);
+        if color_support == ColorSupport::Mono {
+            color_mode = ColorMode::Monochrome;
+        }
+        let theme = Theme::from_config(&config.colors.theme, &heat_overrides, color_support);
+        let border_style = BorderStyle::from_config_str(&config.treemap.border_style);
         let min_rect_width = config.treemap.min_rect_width;
         let min_rect_height = config.treemap.min_rect_height;
         let max_visible_procs = config.treemap.max_visible_procs;
         let anim_frames = config.treemap.animation_frames;
         let sparkline_length = config.general.sparkline_length;
+        let group_threshold = config.treemap.group_threshold;
 
         App {
             running: true,
@@ -72,6 +85,8 @@ impl App {
             show_detail_panel,
             color_mode,
             theme,
+            color_support,
+            border_style,
             status_message: None,
             treemap_area: None,
             min_rect_width,
@@ -80,6 +95,8 @@ impl App {
             history: HistoryStore::new(sparkline_length),
             cpu_history: VecDeque::with_capacity(sparkline_length),
             cpu_history_capacity: sparkline_length,
+            heat_overrides,
+            group_threshold,
             subtree_sizes: HashMap::new(),
             prev_layout_rects: Vec::new(),
             animation_frame: 0,
@@ -133,6 +150,15 @@ impl App {
             return;
         }
 
+        #[cfg(feature = "perf-tracing")]
+        let _layout_span = tracing::debug_span!(
+            "app.compute_layout",
+            width = width,
+            height = height,
+            current_rects = self.layout_rects.len()
+        )
+        .entered();
+
         let filter_lower = self.filter_text.to_lowercase();
 
         // If zoomed, show only the children of the zoom target
@@ -145,6 +171,9 @@ impl App {
         });
 
         let subtree = &self.subtree_sizes;
+
+        #[cfg(feature = "perf-tracing")]
+        let _build_items_span = tracing::debug_span!("app.compute_layout.build_items").entered();
 
         let mut items: Vec<TreemapItem> = if let Some(children) = &source_pids {
             children
@@ -182,27 +211,57 @@ impl App {
                 .collect()
         };
 
+        #[cfg(feature = "perf-tracing")]
+        drop(_build_items_span);
+
+        #[cfg(feature = "perf-tracing")]
+        let _group_span = tracing::debug_span!("app.compute_layout.grouping").entered();
+
+        let total_value: u64 = items.iter().map(|i| i.value).sum();
+        let mut other_count = 0usize;
+        let mut other_value = 0u64;
+
+        if total_value > 0 && self.group_threshold > 0.0 {
+            let mut filtered = Vec::with_capacity(items.len());
+            for item in items.into_iter() {
+                let ratio = item.value as f64 / total_value as f64;
+                if ratio < self.group_threshold {
+                    other_count += 1;
+                    other_value += item.value;
+                } else {
+                    filtered.push(item);
+                }
+            }
+            items = filtered;
+        }
+
         items.sort_by(|a, b| b.value.cmp(&a.value));
 
-        // Cap visible processes and group the rest into "Other"
         if self.max_visible_procs > 0 && items.len() > self.max_visible_procs {
             let small_items = items.split_off(self.max_visible_procs);
-            let small_sum: u64 = small_items.iter().map(|i| i.value).sum();
-            if small_sum > 0 {
-                // Cap visual size to largest visible process so "Other" never dominates
-                let max_visible_value = items.first().map(|i| i.value).unwrap_or(0);
-                let capped_value = small_sum.min(max_visible_value);
-                items.push(TreemapItem {
-                    id: 0,
-                    label: format!(
-                        "Other ({} procs, {})",
-                        small_items.len(),
-                        format_bytes(small_sum)
-                    ),
-                    value: capped_value,
-                });
-            }
+            other_count += small_items.len();
+            other_value += small_items.iter().map(|i| i.value).sum::<u64>();
         }
+
+        if other_value > 0 {
+            let max_visible_value = items.first().map(|i| i.value).unwrap_or(other_value);
+            let capped_value = other_value.min(max_visible_value);
+            items.push(TreemapItem {
+                id: 0,
+                label: format!(
+                    "Other ({} procs, {})",
+                    other_count,
+                    format_bytes(other_value)
+                ),
+                value: capped_value,
+            });
+        }
+
+        #[cfg(feature = "perf-tracing")]
+        drop(_group_span);
+
+        #[cfg(feature = "perf-tracing")]
+        let _sort_span = tracing::debug_span!("app.compute_layout.sort").entered();
 
         let bounds = LayoutRect::new(0.0, 0.0, width as f64, height as f64);
 
@@ -212,14 +271,13 @@ impl App {
             self.animation_frame = 1;
         }
 
-        self.layout_rects = squarify(&items, &bounds);
-        apply_color_mode(
-            &mut self.layout_rects,
-            self.color_mode,
-            &self.snapshot.process_tree,
-            self.snapshot.memory_total,
-            &self.theme,
-        );
+        #[cfg(feature = "perf-tracing")]
+        drop(_sort_span);
+
+        #[cfg(feature = "perf-tracing")]
+        let _squarify_span = tracing::debug_span!("app.compute_layout.squarify").entered();
+
+        self.layout_rects = crate::treemap::algorithm::squarify_sorted(&items, &bounds);
 
         if self.selected_index >= self.layout_rects.len() && !self.layout_rects.is_empty() {
             self.selected_index = 0;
@@ -304,11 +362,15 @@ impl App {
                 self.needs_relayout = true;
             }
             Action::CycleColorMode => {
-                self.color_mode = self.color_mode.next();
+                if self.color_support == ColorSupport::Mono {
+                    self.color_mode = ColorMode::Monochrome;
+                } else {
+                    self.color_mode = self.color_mode.next();
+                }
                 self.needs_relayout = true;
             }
             Action::CycleTheme => {
-                self.theme = self.theme.next();
+                self.theme = self.theme.next(&self.heat_overrides, self.color_support);
                 self.needs_relayout = true;
             }
             Action::ToggleDetailPanel => {
@@ -317,21 +379,20 @@ impl App {
             }
             Action::ZoomIn => self.zoom_in(),
             Action::ZoomOut => self.zoom_out(),
-            Action::Refresh => {
-                self.refresh_data();
-            }
             Action::SelectAt(col, row) => {
                 self.select_at(col, row);
             }
             Action::Kill(pid) => {
-                let result =
-                    kill_process(self.collector.system(), pid, sysinfo::Signal::Term);
-                self.set_kill_status(result);
+                if pid != 0 {
+                    let result = kill_process(self.collector.system(), pid, sysinfo::Signal::Term);
+                    self.set_kill_status(result);
+                }
             }
             Action::ForceKill(pid) => {
-                let result =
-                    kill_process(self.collector.system(), pid, sysinfo::Signal::Kill);
-                self.set_kill_status(result);
+                if pid != 0 {
+                    let result = kill_process(self.collector.system(), pid, sysinfo::Signal::Kill);
+                    self.set_kill_status(result);
+                }
             }
             Action::None => {}
         }
@@ -418,7 +479,7 @@ impl App {
     fn set_kill_status(&mut self, result: KillResult) {
         let msg = match result {
             KillResult::Success(pid, signal) => format!("Sent {signal} to PID {pid}"),
-            KillResult::Failed(_, err) => err,
+            KillResult::Failed(err) => err,
             KillResult::NotFound(pid) => format!("Process {pid} not found"),
         };
         self.status_message = Some((msg, Instant::now()));
@@ -507,27 +568,10 @@ impl App {
                         id: new_rect.id,
                         label: new_rect.label.clone(),
                         value: new_rect.value,
-                        color: new_rect.color,
                     },
                     None => new_rect.clone(), // New rect, no transition
                 }
             })
             .collect()
-    }
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = 1024 * 1024;
-    const GB: u64 = 1024 * 1024 * 1024;
-
-    if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.0} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{} B", bytes)
     }
 }

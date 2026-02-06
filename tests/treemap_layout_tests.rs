@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use treetop::treemap::algorithm::squarify;
+use treetop::treemap::algorithm::squarify_sorted;
 use treetop::treemap::node::{LayoutRect, TreemapItem};
 
 fn make_items(values: &[u64]) -> Vec<TreemapItem> {
@@ -14,6 +14,15 @@ fn make_items(values: &[u64]) -> Vec<TreemapItem> {
         .collect()
 }
 
+fn squarify_for_tests(
+    items: &[TreemapItem],
+    bounds: &LayoutRect,
+) -> Vec<treetop::treemap::node::TreemapRect> {
+    let mut sorted = items.to_vec();
+    sorted.sort_by(|a, b| b.value.cmp(&a.value));
+    squarify_sorted(&sorted, bounds)
+}
+
 proptest! {
     #[test]
     fn area_conservation(
@@ -21,7 +30,7 @@ proptest! {
     ) {
         let bounds = LayoutRect::new(0.0, 0.0, 120.0, 40.0);
         let items = make_items(&values);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         let total_area: f64 = rects.iter().map(|r| r.rect.area()).sum();
         let bounds_area = 120.0 * 40.0;
         prop_assert!(
@@ -36,7 +45,7 @@ proptest! {
     ) {
         let bounds = LayoutRect::new(0.0, 0.0, 120.0, 40.0);
         let items = make_items(&values);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         let eps = 0.01;
         for r in &rects {
             prop_assert!(r.rect.x >= -eps, "x out of bounds: {}", r.rect.x);
@@ -58,7 +67,7 @@ proptest! {
     ) {
         let bounds = LayoutRect::new(0.0, 0.0, 120.0, 40.0);
         let items = make_items(&values);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         for r in &rects {
             prop_assert!(r.rect.width > 0.0, "Zero width for id={}", r.id);
             prop_assert!(r.rect.height > 0.0, "Zero height for id={}", r.id);
@@ -71,7 +80,7 @@ proptest! {
     ) {
         let bounds = LayoutRect::new(0.0, 0.0, 120.0, 40.0);
         let items = make_items(&values);
-        let rects = squarify(&items, &bounds);
+        let rects = squarify_for_tests(&items, &bounds);
         prop_assert_eq!(rects.len(), items.len());
     }
 }
