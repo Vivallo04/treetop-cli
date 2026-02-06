@@ -2,6 +2,12 @@
 name = "treetop"
 version = "0.1.0"
 edition = "2024"
+description = "Cross-platform TUI process monitor with interactive treemap visualization."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Vivallo04/treetop-cli"
+keywords = ["tui", "process-monitor", "treemap", "sysinfo", "ratatui"]
+categories = ["command-line-utilities", "visualization"]
 
 [features]
 default = []
