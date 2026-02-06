@@ -5,6 +5,7 @@ use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
+use crate::treemap::color::Theme;
 use crate::treemap::node::TreemapRect;
 
 pub struct TreemapWidget<'a> {
@@ -12,6 +13,7 @@ pub struct TreemapWidget<'a> {
     selected_index: usize,
     min_label_width: u16,
     min_label_height: u16,
+    theme: &'a Theme,
 }
 
 pub fn render(
@@ -21,12 +23,14 @@ pub fn render(
     selected_index: usize,
     min_label_width: u16,
     min_label_height: u16,
+    theme: &Theme,
 ) {
     let widget = TreemapWidget {
         rects,
         selected_index,
         min_label_width,
         min_label_height,
+        theme,
     };
     frame.render_widget(widget, area);
 }
@@ -79,24 +83,30 @@ impl<'a> Widget for TreemapWidget<'a> {
                 }
             }
 
-            // Draw border for selected item
-            if is_selected && w >= 3 && h >= 3 {
-                let border_style = Style::default()
-                    .fg(Color::Yellow)
-                    .bg(bg_color)
-                    .add_modifier(Modifier::BOLD);
-                draw_border(buf, term_rect, border_style);
+            // Draw rounded border for all rects that are large enough
+            if w >= 3 && h >= 3 {
+                let border_style = if is_selected {
+                    Style::default()
+                        .fg(self.theme.selection_border)
+                        .bg(bg_color)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                        .fg(self.theme.overlay_border)
+                        .bg(bg_color)
+                };
+                draw_rounded_border(buf, term_rect, border_style);
             }
 
-            // Label positioning (inside border if selected, 1-cell padding otherwise)
-            let (label_x, label_max_w) = if is_selected && w >= 3 {
+            // Label positioning — always inside border since all rects have them now
+            let (label_x, label_max_w) = if w >= 3 {
                 (x + 1, w.saturating_sub(2))
             } else if w >= 2 {
                 (x + 1, w.saturating_sub(1))
             } else {
                 (x, w)
             };
-            let label_y = if is_selected && h >= 3 { y + 1 } else { y };
+            let label_y = if h >= 3 { y + 1 } else { y };
 
             // Only render text if the rect meets minimum size thresholds
             if w >= self.min_label_width && h >= self.min_label_height {
@@ -125,30 +135,37 @@ impl<'a> Widget for TreemapWidget<'a> {
 
 fn contrast_color(bg: Color) -> Color {
     match bg {
-        Color::Red | Color::LightRed => Color::White,
-        Color::Yellow => Color::Black,
-        Color::Green => Color::Black,
+        Color::Rgb(r, g, b) => {
+            let luminance = 0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64;
+            if luminance > 128.0 {
+                Color::Rgb(30, 30, 46)
+            } else {
+                Color::Rgb(205, 214, 244)
+            }
+        }
+        Color::Yellow | Color::Green | Color::LightGreen | Color::LightYellow => Color::Black,
         _ => Color::White,
     }
 }
 
-fn draw_border(buf: &mut Buffer, rect: Rect, style: Style) {
+fn draw_rounded_border(buf: &mut Buffer, rect: Rect, style: Style) {
     let x1 = rect.x;
     let y1 = rect.y;
     let x2 = rect.x + rect.width - 1;
     let y2 = rect.y + rect.height - 1;
 
+    // Rounded corners
     if let Some(c) = buf.cell_mut((x1, y1)) {
-        c.set_char('\u{250C}').set_style(style);
+        c.set_char('\u{256D}').set_style(style); // ╭
     }
     if let Some(c) = buf.cell_mut((x2, y1)) {
-        c.set_char('\u{2510}').set_style(style);
+        c.set_char('\u{256E}').set_style(style); // ╮
     }
     if let Some(c) = buf.cell_mut((x1, y2)) {
-        c.set_char('\u{2514}').set_style(style);
+        c.set_char('\u{2570}').set_style(style); // ╰
     }
     if let Some(c) = buf.cell_mut((x2, y2)) {
-        c.set_char('\u{2518}').set_style(style);
+        c.set_char('\u{256F}').set_style(style); // ╯
     }
 
     for col in (x1 + 1)..x2 {

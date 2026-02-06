@@ -1,56 +1,165 @@
-use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use std::collections::VecDeque;
+
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, BorderType, Borders, Gauge, Paragraph, Sparkline};
 use ratatui::Frame;
 
 use crate::system::snapshot::SystemSnapshot;
-use crate::treemap::color::ColorMode;
+use crate::treemap::color::{ColorMode, Theme};
 
-pub fn render(frame: &mut Frame, area: Rect, snapshot: &SystemSnapshot, color_mode: ColorMode) {
-    let cpu_str = format!("CPU: {:.1}%", snapshot.cpu_usage_percent);
+pub fn render(
+    frame: &mut Frame,
+    area: Rect,
+    snapshot: &SystemSnapshot,
+    color_mode: ColorMode,
+    theme: &Theme,
+    breadcrumbs: &[(u32, String)],
+    cpu_history: &VecDeque<u64>,
+) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(40),
+            Constraint::Percentage(30),
+            Constraint::Percentage(30),
+        ])
+        .split(area);
 
-    let ram_used_mb = snapshot.memory_used / 1_048_576;
-    let ram_total_mb = snapshot.memory_total / 1_048_576;
-    let ram_pct = if snapshot.memory_total > 0 {
-        (snapshot.memory_used as f64 / snapshot.memory_total as f64) * 100.0
-    } else {
-        0.0
-    };
-    let ram_str = format!("RAM: {}/{} MB ({:.1}%)", ram_used_mb, ram_total_mb, ram_pct);
+    // Block 1: Branding + breadcrumbs + mode + theme
+    render_branding(frame, chunks[0], snapshot, color_mode, theme, breadcrumbs);
 
-    let swap_str = if snapshot.swap_total > 0 {
-        let swap_used_mb = snapshot.swap_used / 1_048_576;
-        let swap_total_mb = snapshot.swap_total / 1_048_576;
-        format!("Swap: {}/{} MB", swap_used_mb, swap_total_mb)
-    } else {
-        "Swap: N/A".to_string()
-    };
+    // Block 2: RAM Gauge
+    render_ram_gauge(frame, chunks[1], snapshot, theme);
 
-    let procs = format!("Procs: {}", snapshot.process_tree.processes.len());
+    // Block 3: CPU Sparkline
+    render_cpu_sparkline(frame, chunks[2], snapshot, theme, cpu_history);
+}
 
-    let header_line = Line::from(vec![
+fn render_branding(
+    frame: &mut Frame,
+    area: Rect,
+    snapshot: &SystemSnapshot,
+    color_mode: ColorMode,
+    theme: &Theme,
+    breadcrumbs: &[(u32, String)],
+) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.overlay_border));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let mut spans = vec![
         Span::styled(
             " treetop ",
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Green)
+                .fg(theme.header_accent_fg)
+                .bg(theme.header_accent_bg)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw("  "),
-        Span::styled(cpu_str, Style::default().fg(Color::Cyan)),
-        Span::raw("  "),
-        Span::styled(ram_str, Style::default().fg(Color::Yellow)),
-        Span::raw("  "),
-        Span::styled(swap_str, Style::default().fg(Color::Magenta)),
-        Span::raw("  "),
-        Span::styled(procs, Style::default().fg(Color::White)),
+    ];
+
+    for (_, name) in breadcrumbs {
+        spans.push(Span::styled(
+            " > ",
+            Style::default().fg(theme.text_secondary),
+        ));
+        spans.push(Span::styled(
+            name.as_str(),
+            Style::default()
+                .fg(theme.accent_mauve)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    spans.extend([
         Span::raw("  "),
         Span::styled(
-            format!("Mode: {}", color_mode.label()),
-            Style::default().fg(Color::LightGreen),
+            color_mode.label().to_string(),
+            Style::default().fg(theme.text_secondary),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            format!("Procs: {}", snapshot.process_tree.processes.len()),
+            Style::default().fg(theme.text_secondary),
         ),
     ]);
 
-    frame.render_widget(Paragraph::new(header_line), area);
+    let line = Line::from(spans);
+    frame.render_widget(Paragraph::new(line), inner);
+}
+
+fn render_ram_gauge(
+    frame: &mut Frame,
+    area: Rect,
+    snapshot: &SystemSnapshot,
+    theme: &Theme,
+) {
+    let ram_used_mb = snapshot.memory_used / 1_048_576;
+    let ram_total_mb = snapshot.memory_total / 1_048_576;
+    let ram_ratio = if snapshot.memory_total > 0 {
+        (snapshot.memory_used as f64 / snapshot.memory_total as f64).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    let ram_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.overlay_border))
+        .title(Span::styled(
+            " RAM ",
+            Style::default()
+                .fg(theme.text_secondary)
+                .add_modifier(Modifier::BOLD),
+        ));
+
+    let gauge = Gauge::default()
+        .block(ram_block)
+        .gauge_style(
+            Style::default()
+                .fg(theme.gauge_filled)
+                .bg(theme.gauge_unfilled),
+        )
+        .ratio(ram_ratio)
+        .label(format!(
+            "{}/{} MB ({:.0}%)",
+            ram_used_mb,
+            ram_total_mb,
+            ram_ratio * 100.0
+        ));
+
+    frame.render_widget(gauge, area);
+}
+
+fn render_cpu_sparkline(
+    frame: &mut Frame,
+    area: Rect,
+    snapshot: &SystemSnapshot,
+    theme: &Theme,
+    cpu_history: &VecDeque<u64>,
+) {
+    let cpu_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme.overlay_border))
+        .title(Span::styled(
+            format!(" CPU {:.0}% ", snapshot.cpu_usage_percent),
+            Style::default()
+                .fg(theme.text_secondary)
+                .add_modifier(Modifier::BOLD),
+        ));
+
+    let cpu_data: Vec<u64> = cpu_history.iter().copied().collect();
+    let sparkline = Sparkline::default()
+        .block(cpu_block)
+        .data(&cpu_data)
+        .max(10000)
+        .style(Style::default().fg(theme.sparkline_color));
+
+    frame.render_widget(sparkline, area);
 }

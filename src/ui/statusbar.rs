@@ -1,10 +1,11 @@
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::app::InputMode;
+use crate::treemap::color::Theme;
 
 pub fn render(
     frame: &mut Frame,
@@ -12,15 +13,17 @@ pub fn render(
     input_mode: InputMode,
     filter_text: &str,
     status_message: Option<&(String, std::time::Instant)>,
+    theme: &Theme,
+    is_zoomed: bool,
 ) {
-    let bg_style = Style::default().bg(Color::DarkGray);
+    let bg_style = Style::default().bg(theme.statusbar_bg);
 
     // Status message takes priority
     if let Some((msg, _)) = status_message {
         let color = if msg.starts_with("Sent") || msg.starts_with("Killed") {
-            Color::Green
+            theme.status_ok
         } else {
-            Color::Red
+            theme.status_err
         };
         let line = Line::from(Span::styled(
             format!(" {msg}"),
@@ -32,63 +35,79 @@ pub fn render(
 
     let line = match input_mode {
         InputMode::Filter => {
-            Line::from(vec![
+            let mut spans = vec![
                 Span::styled(
                     " / ",
                     Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Yellow)
+                        .fg(theme.pill_key_fg)
+                        .bg(theme.pill_key_bg)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(format!(" {filter_text}")),
+                Span::styled(
+                    format!(" {filter_text}"),
+                    Style::default().fg(theme.pill_desc_fg),
+                ),
                 Span::styled(
                     "\u{2588}",
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(theme.pill_key_bg),
                 ),
-            ])
+            ];
+            spans.extend(pill_spans("Esc", "Cancel", theme));
+            spans.extend(pill_spans("Enter", "Apply", theme));
+            Line::from(spans)
         }
         InputMode::Normal if !filter_text.is_empty() => {
-            Line::from(vec![
+            let mut spans = vec![
                 Span::styled(
                     " Filter: ",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.pill_key_bg)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(filter_text),
-                Span::raw("  "),
-                key_span("Esc"),
-                Span::raw(" Clear  "),
-                key_span("/"),
-                Span::raw(" Edit"),
-            ])
+                Span::styled(
+                    filter_text,
+                    Style::default().fg(theme.pill_desc_fg),
+                ),
+            ];
+            spans.extend(pill_spans("Esc", "Clear", theme));
+            spans.extend(pill_spans("/", "Edit", theme));
+            Line::from(spans)
         }
         InputMode::Normal => {
-            Line::from(vec![
-                key_span(" q"),
-                Span::raw(" Quit  "),
-                key_span("/"),
-                Span::raw(" Filter  "),
-                key_span("k"),
-                Span::raw(" Kill  "),
-                key_span("d"),
-                Span::raw(" Detail  "),
-                key_span("c"),
-                Span::raw(" Color  "),
-                key_span("\u{2190}\u{2191}\u{2192}\u{2193}"),
-                Span::raw(" Navigate"),
-            ])
+            let mut spans = Vec::new();
+            spans.extend(pill_spans("q", "Quit", theme));
+            spans.extend(pill_spans("/", "Filter", theme));
+            spans.extend(pill_spans("Enter", "Zoom", theme));
+            if is_zoomed {
+                spans.extend(pill_spans("Esc", "Back", theme));
+            }
+            spans.extend(pill_spans("k", "Kill", theme));
+            spans.extend(pill_spans("d", "Detail", theme));
+            spans.extend(pill_spans("c", "Color", theme));
+            spans.extend(pill_spans("t", "Theme", theme));
+            spans.extend(pill_spans("\u{2190}\u{2193}\u{2191}\u{2192}", "Nav", theme));
+            Line::from(spans)
         }
     };
 
     frame.render_widget(Paragraph::new(line).style(bg_style), area);
 }
 
-fn key_span(key: &str) -> Span<'_> {
-    Span::styled(
-        key,
-        Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    )
+fn pill_spans<'a>(key: &'a str, desc: &'a str, theme: &Theme) -> Vec<Span<'a>> {
+    vec![
+        Span::raw(" "),
+        Span::styled(
+            format!(" {key} "),
+            Style::default()
+                .fg(theme.pill_key_fg)
+                .bg(theme.pill_key_bg)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(" {desc}"),
+            Style::default()
+                .fg(theme.pill_desc_fg)
+                .bg(theme.surface_bg),
+        ),
+    ]
 }

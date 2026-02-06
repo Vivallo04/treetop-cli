@@ -104,6 +104,13 @@ async fn run(terminal: &mut ratatui::DefaultTerminal, cli: Cli) -> Result<()> {
         }
 
         terminal.draw(|frame| ui::draw(frame, &mut app))?;
+
+        // Drive animation if active (~200ms total for 5 frames)
+        while app.is_animating() {
+            std::thread::sleep(Duration::from_millis(40));
+            app.tick_animation();
+            terminal.draw(|frame| ui::draw(frame, &mut app))?;
+        }
     }
 
     Ok(())

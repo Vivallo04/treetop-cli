@@ -19,6 +19,7 @@ pub struct GeneralConfig {
     pub default_sort: String,
     pub show_detail_panel: bool,
     pub show_kernel_threads: bool,
+    pub sparkline_length: usize,
 }
 
 impl Default for GeneralConfig {
@@ -29,6 +30,7 @@ impl Default for GeneralConfig {
             default_sort: "memory".to_string(),
             show_detail_panel: false,
             show_kernel_threads: false,
+            sparkline_length: 60,
         }
     }
 }
@@ -41,6 +43,7 @@ pub struct TreemapConfig {
     pub group_threshold: f64,
     pub max_visible_procs: usize,
     pub border_style: String,
+    pub animation_frames: u8,
 }
 
 impl Default for TreemapConfig {
@@ -51,6 +54,7 @@ impl Default for TreemapConfig {
             group_threshold: 0.01,
             max_visible_procs: 25,
             border_style: "thin".to_string(),
+            animation_frames: 5,
         }
     }
 }
@@ -86,6 +90,7 @@ pub struct KeybindsConfig {
     pub zoom_out: String,
     pub cycle_color: String,
     pub toggle_detail: String,
+    pub cycle_theme: String,
     pub help: String,
 }
 
@@ -100,6 +105,7 @@ impl Default for KeybindsConfig {
             zoom_out: "Escape".to_string(),
             cycle_color: "c".to_string(),
             toggle_detail: "d".to_string(),
+            cycle_theme: "t".to_string(),
             help: "?".to_string(),
         }
     }
