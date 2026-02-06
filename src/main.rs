@@ -166,9 +166,9 @@ fn run_perf_capture(config: config::Config, cli: &Cli) -> Result<()> {
     #[cfg(not(feature = "perf-tracing"))]
     {
         let _ = (config, cli);
-        return Err(eyre!(
+        Err(eyre!(
             "--perf-capture requires the `perf-tracing` feature; run with `cargo run --features perf-tracing -- --perf-capture`"
-        ));
+        ))
     }
 
     #[cfg(feature = "perf-tracing")]
