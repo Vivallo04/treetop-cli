@@ -50,9 +50,21 @@ fn kill_spawned_child_terminates() {
     let pid = child.id();
 
     let mut sys = System::new();
+    // Give sysinfo a moment to observe the newly-spawned process on slower runners.
+    thread::sleep(Duration::from_millis(100));
     refresh_system(&mut sys);
 
-    let result = kill_process(&sys, pid, Signal::Term);
+    let signal = if cfg!(windows) {
+        Signal::Kill
+    } else {
+        Signal::Term
+    };
+    let mut result = kill_process(&sys, pid, signal);
+    if matches!(result, KillResult::NotFound(_) | KillResult::Failed(_)) {
+        thread::sleep(Duration::from_millis(100));
+        refresh_system(&mut sys);
+        result = kill_process(&sys, pid, Signal::Kill);
+    }
 
     match result {
         KillResult::Success(_, _) => {

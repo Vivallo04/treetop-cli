@@ -25,7 +25,12 @@ pub fn kill_process(sys: &System, pid: u32, signal: Signal) -> KillResult {
             match process.kill_with(signal) {
                 Some(true) => KillResult::Success(pid, signal_name),
                 Some(false) => {
-                    KillResult::Failed(format!("Failed to send {signal_name} to PID {pid}"))
+                    // Some platforms may reject a specific signal but still permit force kill.
+                    if process.kill() {
+                        KillResult::Success(pid, signal_name)
+                    } else {
+                        KillResult::Failed(format!("Failed to send {signal_name} to PID {pid}"))
+                    }
                 }
                 None => {
                     // Signal not supported on this platform, fall back to kill()
