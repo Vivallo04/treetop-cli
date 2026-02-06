@@ -24,10 +24,12 @@ fn rs_files(root: &Path) -> Vec<PathBuf> {
 
 fn rel(path: &Path) -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    path.strip_prefix(root)
+    let rel = path
+        .strip_prefix(root)
         .unwrap_or(path)
         .to_string_lossy()
-        .to_string()
+        .to_string();
+    rel.replace('\\', "/")
 }
 
 #[test]
