@@ -10,6 +10,8 @@ use crate::treemap::node::TreemapRect;
 pub struct TreemapWidget<'a> {
     rects: &'a [TreemapRect],
     selected_index: usize,
+    min_label_width: u16,
+    min_label_height: u16,
 }
 
 pub fn render(
@@ -17,10 +19,14 @@ pub fn render(
     area: Rect,
     rects: &[TreemapRect],
     selected_index: usize,
+    min_label_width: u16,
+    min_label_height: u16,
 ) {
     let widget = TreemapWidget {
         rects,
         selected_index,
+        min_label_width,
+        min_label_height,
     };
     frame.render_widget(widget, area);
 }
@@ -54,8 +60,9 @@ impl<'a> Widget for TreemapWidget<'a> {
             if x >= x2 || y >= y2 {
                 continue;
             }
-            let w = x2 - x;
-            let h = y2 - y;
+            // Inset by 1 cell on right and bottom to create visual gap between rects
+            let w = if x2 - x > 2 { x2 - x - 1 } else { x2 - x };
+            let h = if y2 - y > 1 { y2 - y - 1 } else { y2 - y };
 
             let term_rect = Rect::new(x, y, w, h);
 
@@ -81,31 +88,36 @@ impl<'a> Widget for TreemapWidget<'a> {
                 draw_border(buf, term_rect, border_style);
             }
 
-            // Label positioning (inside border if selected)
+            // Label positioning (inside border if selected, 1-cell padding otherwise)
             let (label_x, label_max_w) = if is_selected && w >= 3 {
                 (x + 1, w.saturating_sub(2))
+            } else if w >= 2 {
+                (x + 1, w.saturating_sub(1))
             } else {
                 (x, w)
             };
             let label_y = if is_selected && h >= 3 { y + 1 } else { y };
 
-            // Render process name
-            if label_max_w >= 2 {
-                let label = truncate(&trect.label, label_max_w as usize);
-                let style = Style::default()
-                    .fg(fg_color)
-                    .bg(bg_color)
-                    .add_modifier(Modifier::BOLD);
-                buf.set_string(label_x, label_y, &label, style);
-            }
+            // Only render text if the rect meets minimum size thresholds
+            if w >= self.min_label_width && h >= self.min_label_height {
+                // Render process name (need at least 5 chars for a readable label)
+                if label_max_w >= 5 {
+                    let label = truncate(&trect.label, label_max_w as usize);
+                    let style = Style::default()
+                        .fg(fg_color)
+                        .bg(bg_color)
+                        .add_modifier(Modifier::BOLD);
+                    buf.set_string(label_x, label_y, &label, style);
+                }
 
-            // Render memory value below label if space allows
-            let value_y = label_y + 1;
-            if value_y < y + h && label_max_w >= 4 {
-                let value_str = format_bytes(trect.value);
-                let value = truncate(&value_str, label_max_w as usize);
-                let style = Style::default().fg(fg_color).bg(bg_color);
-                buf.set_string(label_x, value_y, &value, style);
+                // Render memory value below label if space allows
+                let value_y = label_y + 1;
+                if value_y < y + h && label_max_w >= 8 {
+                    let value_str = format_bytes(trect.value);
+                    let value = truncate(&value_str, label_max_w as usize);
+                    let style = Style::default().fg(fg_color).bg(bg_color);
+                    buf.set_string(label_x, value_y, &value, style);
+                }
             }
         }
     }

@@ -29,6 +29,10 @@ impl Collector {
         Collector { sys }
     }
 
+    pub fn system(&self) -> &System {
+        &self.sys
+    }
+
     pub fn refresh(&mut self) -> SystemSnapshot {
         self.sys.refresh_memory();
         self.sys.refresh_cpu_all();
@@ -59,6 +63,10 @@ impl Collector {
                 .collect::<Vec<_>>()
                 .join(" ");
 
+            let user_id = process.user_id().map(|uid| format!("{uid:?}"));
+            let group_id = process.group_id().map(|gid| format!("{gid:?}"));
+            let status = format!("{:?}", process.status());
+
             let info = ProcessInfo {
                 pid: pid_u32,
                 ppid: ppid_u32,
@@ -66,6 +74,9 @@ impl Collector {
                 command,
                 memory_bytes: process.memory(),
                 cpu_percent: process.cpu_usage(),
+                user_id,
+                group_id,
+                status,
                 children: Vec::new(),
             };
 

@@ -5,8 +5,9 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use crate::system::snapshot::SystemSnapshot;
+use crate::treemap::color::ColorMode;
 
-pub fn render(frame: &mut Frame, area: Rect, snapshot: &SystemSnapshot) {
+pub fn render(frame: &mut Frame, area: Rect, snapshot: &SystemSnapshot, color_mode: ColorMode) {
     let cpu_str = format!("CPU: {:.1}%", snapshot.cpu_usage_percent);
 
     let ram_used_mb = snapshot.memory_used / 1_048_576;
@@ -44,6 +45,11 @@ pub fn render(frame: &mut Frame, area: Rect, snapshot: &SystemSnapshot) {
         Span::styled(swap_str, Style::default().fg(Color::Magenta)),
         Span::raw("  "),
         Span::styled(procs, Style::default().fg(Color::White)),
+        Span::raw("  "),
+        Span::styled(
+            format!("Mode: {}", color_mode.label()),
+            Style::default().fg(Color::LightGreen),
+        ),
     ]);
 
     frame.render_widget(Paragraph::new(header_line), area);

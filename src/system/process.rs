@@ -8,6 +8,9 @@ pub struct ProcessInfo {
     pub command: String,
     pub memory_bytes: u64,
     pub cpu_percent: f32,
+    pub user_id: Option<String>,
+    pub group_id: Option<String>,
+    pub status: String,
     pub children: Vec<u32>,
 }
 
