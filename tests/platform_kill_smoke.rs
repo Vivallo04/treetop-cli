@@ -2,7 +2,7 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, Signal, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System};
 use treetop::system::kill::{KillResult, kill_process};
 
 fn refresh_system(sys: &mut System) {
@@ -16,8 +16,13 @@ fn refresh_system(sys: &mut System) {
 fn spawn_long_lived_child() -> Child {
     #[cfg(windows)]
     let mut cmd = {
-        let mut c = Command::new("cmd");
-        c.args(["/C", "timeout /T 30 /NOBREAK >NUL"]);
+        let mut c = Command::new("powershell");
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Start-Sleep -Seconds 30",
+        ]);
         c
     };
 
@@ -35,6 +40,26 @@ fn spawn_long_lived_child() -> Child {
         .expect("failed to spawn child process")
 }
 
+fn wait_for_pid(sys: &mut System, pid: u32, timeout: Duration) -> bool {
+    let sys_pid = Pid::from_u32(pid);
+    let deadline = Instant::now() + timeout;
+    loop {
+        let pids = [sys_pid];
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&pids),
+            true,
+            ProcessRefreshKind::everything(),
+        );
+        if sys.process(sys_pid).is_some() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
 #[test]
 fn kill_nonexistent_pid_returns_not_found() {
     let mut sys = System::new();
@@ -50,9 +75,10 @@ fn kill_spawned_child_terminates() {
     let pid = child.id();
 
     let mut sys = System::new();
-    // Give sysinfo a moment to observe the newly-spawned process on slower runners.
-    thread::sleep(Duration::from_millis(100));
-    refresh_system(&mut sys);
+    if !wait_for_pid(&mut sys, pid, Duration::from_secs(3)) {
+        let _ = child.kill();
+        panic!("child process PID {pid} was not observed by sysinfo before kill attempt");
+    }
 
     let signal = if cfg!(windows) {
         Signal::Kill
