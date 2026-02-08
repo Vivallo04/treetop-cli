@@ -1,0 +1,58 @@
+{
+  "generated_at_unix_s": 1770391271,
+  "os": "macos",
+  "arch": "aarch64",
+  "perf_capture": {
+    "iterations": 120,
+    "width": 160,
+    "height": 50,
+    "span_log_path": "target/perf/perf_spans.jsonl",
+    "process_counts": {
+      "min": 573,
+      "p50": 573,
+      "max": 573
+    },
+    "spans": {
+      "app.compute_layout": {
+        "count": 120,
+        "p50_us": 207.0,
+        "p95_us": 308.0,
+        "max_us": 479.0
+      },
+      "collector.refresh": {
+        "count": 121,
+        "p50_us": 9370.0,
+        "p95_us": 10100.0,
+        "max_us": 16200.0
+      },
+      "ui.treemap_widget.render": {
+        "count": 120,
+        "p50_us": 1190.0,
+        "p95_us": 1310.0,
+        "max_us": 1650.0
+      }
+    }
+  },
+  "criterion": {
+    "layout_pipeline_500_1000_2000": {
+      "1000": 93.69,
+      "2000": 210.8,
+      "500": 42.6
+    },
+    "process_tree_build_500_1000_2000": {
+      "1000": 245.03,
+      "2000": 496.07,
+      "500": 121.58
+    },
+    "squarify_500_1000_2000": {
+      "1000": 94.44,
+      "2000": 210.0,
+      "500": 42.41
+    },
+    "treemap_widget_render_500_1000_2000": {
+      "1000": 354.21,
+      "2000": 336.11,
+      "500": 391.51
+    }
+  }
+}

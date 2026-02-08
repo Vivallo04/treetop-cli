@@ -1,0 +1,5 @@
+---
+source: src/ui/tests.rs
+expression: output
+---
+  q  Quit  /  Filter  Enter  Zoom  Esc  Back  k  Kill  d  Detail  c  Color  t  T

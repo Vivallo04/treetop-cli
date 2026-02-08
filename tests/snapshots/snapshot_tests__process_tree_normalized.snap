@@ -1,0 +1,54 @@
+---
+source: tests/snapshot_tests.rs
+assertion_line: 52
+expression: normalized
+---
+[
+    (
+        1,
+        0,
+        [
+            2,
+            3,
+        ],
+        "init",
+        120000000,
+    ),
+    (
+        2,
+        1,
+        [
+            4,
+        ],
+        "worker_a",
+        80000000,
+    ),
+    (
+        3,
+        1,
+        [],
+        "worker_b",
+        64000000,
+    ),
+    (
+        4,
+        2,
+        [],
+        "worker_child",
+        32000000,
+    ),
+    (
+        8,
+        4040,
+        [],
+        "orphan",
+        12000000,
+    ),
+    (
+        10,
+        0,
+        [],
+        "service",
+        48000000,
+    ),
+]

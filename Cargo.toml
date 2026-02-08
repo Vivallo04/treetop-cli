@@ -2,5 +2,45 @@
 name = "treetop"
 version = "0.1.0"
 edition = "2024"
+description = "Cross-platform TUI process monitor with interactive treemap visualization."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Vivallo04/treetop-cli"
+keywords = ["tui", "process-monitor", "treemap", "sysinfo", "ratatui"]
+categories = ["command-line-utilities", "visualization"]
+exclude = [
+    ".github/**",
+    ".vscode/**",
+    ".idea/**",
+    "docs/**",
+    "ProjectRequirements.md",
+]
+
+[features]
+default = []
+perf-tracing = ["dep:tracing", "dep:tracing-subscriber"]
 
 [dependencies]
+clap = { version = "4.5.57", features = ["derive"] }
+color-eyre = "0.6.5"
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+futures = "0.3"
+dirs = "6.0.0"
+ratatui = "0.30.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sysinfo = "0.38.0"
+tokio = { version = "1.49.0", features = ["rt", "macros", "time", "sync"] }
+toml = "0.9.11"
+tracing = { version = "0.1.41", optional = true }
+tracing-subscriber = { version = "0.3.20", optional = true, features = ["fmt", "json"] }
+unicode-width = "0.2.2"
+
+[dev-dependencies]
+criterion = "0.8.2"
+insta = "1.46.3"
+proptest = "1.10.0"
+
+[[bench]]
+name = "treemap_bench"
+harness = false
