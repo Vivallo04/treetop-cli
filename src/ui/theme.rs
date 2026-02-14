@@ -246,9 +246,9 @@ impl Theme {
             pill_key_fg: Color::Black,
             pill_desc_fg: Color::White,
             surface_bg: Color::DarkGray,
-            gauge_filled: Color::Yellow,
+            gauge_filled: Color::Rgb(103, 232, 249),
             gauge_unfilled: Color::DarkGray,
-            sparkline_color: Color::Cyan,
+            sparkline_color: Color::Rgb(251, 146, 60),
             other_group_bg: Color::Rgb(35, 40, 51),
             heat_colors: [
                 Color::Rgb(71, 85, 105),
@@ -375,9 +375,9 @@ impl Theme {
             pill_key_fg: Color::Rgb(30, 30, 46),
             pill_desc_fg: Color::Rgb(205, 214, 244),
             surface_bg: Color::Rgb(49, 50, 68),
-            gauge_filled: Color::Rgb(166, 227, 161),
+            gauge_filled: Color::Rgb(125, 211, 252),
             gauge_unfilled: Color::Rgb(69, 71, 90),
-            sparkline_color: Color::Rgb(137, 180, 250),
+            sparkline_color: Color::Rgb(251, 146, 60),
             other_group_bg: Color::Rgb(49, 50, 68),
             heat_colors: [
                 Color::Rgb(71, 85, 105),
