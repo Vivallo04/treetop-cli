@@ -51,8 +51,8 @@ jobs:
         run: cargo check --target x86_64-unknown-linux-musl
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
-      - name: Cross check aarch64-linux
-        run: cross check --target aarch64-unknown-linux-gnu
+      - name: Cross build aarch64-linux
+        run: cross build --target aarch64-unknown-linux-gnu
 
   bench-compile:
     runs-on: ubuntu-latest

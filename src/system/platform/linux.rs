@@ -13,12 +13,11 @@ impl PlatformExtensions for Platform {
             let parts: Vec<&str> = line.splitn(3, ':').collect();
             if parts.len() == 3 {
                 let cgroup_path = parts[2].trim_start_matches('/');
-                if !cgroup_path.is_empty() {
-                    if let Some(name) = cgroup_path.rsplit('/').next() {
-                        if !name.is_empty() {
-                            return Some(name.to_string());
-                        }
-                    }
+                if !cgroup_path.is_empty()
+                    && let Some(name) = cgroup_path.rsplit('/').next()
+                    && !name.is_empty()
+                {
+                    return Some(name.to_string());
                 }
             }
         }
