@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v0.2.0)'
+        required: true
+        type: string
 
 jobs:
   build-artifacts:
@@ -77,6 +83,12 @@ jobs:
   github-release:
     needs: build-artifacts
     runs-on: ubuntu-latest
+    # Only create GitHub releases for stable versions (not RC/alpha/beta) or manual triggers
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (!contains(github.ref_name, '-rc') &&
+       !contains(github.ref_name, '-alpha') &&
+       !contains(github.ref_name, '-beta'))
     steps:
       - uses: actions/download-artifact@v4
         with:
