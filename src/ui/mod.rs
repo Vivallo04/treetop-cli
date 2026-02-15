@@ -1,5 +1,6 @@
 pub mod detail_panel;
 pub mod header;
+pub mod help;
 pub mod selection_bar;
 pub mod statusbar;
 pub mod theme;
@@ -115,10 +116,16 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let selected = app
         .selected_process()
         .map(|p| selection_bar::SelectionInfo {
+            pid: p.pid,
             name: p.name.clone(),
             memory_bytes: p.memory_bytes,
         });
     selection_bar::render(frame, chunks[2], selected, &app.theme);
+
+    // Help overlay — rendered last to appear on top
+    if app.show_help() {
+        help::render(frame, frame.area(), &app.help_entries(), &app.theme);
+    }
 }
 
 #[cfg(test)]

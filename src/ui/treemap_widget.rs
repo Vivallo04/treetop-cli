@@ -470,14 +470,14 @@ mod tests {
         let rects = vec![
             ColoredTreemapRect {
                 rect: LayoutRect::new(0.0, 0.0, 4.0, 4.0),
-                id: 1,
+                pid: 1,
                 label: "a".into(),
                 value: 1,
                 color: Color::Rgb(96, 165, 250),
             },
             ColoredTreemapRect {
                 rect: LayoutRect::new(4.0, 0.0, 4.0, 4.0),
-                id: 2,
+                pid: 2,
                 label: "b".into(),
                 value: 1,
                 color: Color::Rgb(251, 146, 60),
@@ -494,14 +494,14 @@ mod tests {
         let rects = vec![
             ColoredTreemapRect {
                 rect: LayoutRect::new(0.0, 0.0, 4.0, 4.0),
-                id: 1,
+                pid: 1,
                 label: "a".into(),
                 value: 1,
                 color: Color::Rgb(96, 165, 250),
             },
             ColoredTreemapRect {
                 rect: LayoutRect::new(4.0, 0.0, 4.0, 4.0),
-                id: 2,
+                pid: 2,
                 label: "b".into(),
                 value: 1,
                 color: Color::Rgb(251, 146, 60),
@@ -518,21 +518,21 @@ mod tests {
         let rects = vec![
             ColoredTreemapRect {
                 rect: LayoutRect::new(0.0, 0.0, 12.0, 4.0),
-                id: 1,
+                pid: 1,
                 label: "a".into(),
                 value: 1,
                 color: Color::Rgb(96, 165, 250),
             },
             ColoredTreemapRect {
                 rect: LayoutRect::new(0.0, 4.0, 6.0, 4.0),
-                id: 2,
+                pid: 2,
                 label: "b".into(),
                 value: 1,
                 color: Color::Rgb(251, 146, 60),
             },
             ColoredTreemapRect {
                 rect: LayoutRect::new(6.0, 4.0, 6.0, 4.0),
-                id: 3,
+                pid: 3,
                 label: "c".into(),
                 value: 1,
                 color: Color::Rgb(45, 212, 191),
@@ -547,7 +547,7 @@ mod tests {
     fn labels_have_left_breathing_room() {
         let rects = vec![ColoredTreemapRect {
             rect: LayoutRect::new(0.0, 0.0, 10.0, 4.0),
-            id: 1,
+            pid: 1,
             label: "alpha".into(),
             value: 1_000_000,
             color: Color::Rgb(96, 165, 250),

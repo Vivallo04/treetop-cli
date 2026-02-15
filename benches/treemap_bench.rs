@@ -3,7 +3,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use std::hint::black_box;
-use treetop::system::process::{ProcessInfo, build_process_tree_from_flat};
+use treetop::system::process::{ProcessInfo, ProcessState, build_process_tree_from_flat};
 use treetop::treemap::algorithm::squarify_sorted;
 use treetop::treemap::node::{LayoutRect, TreemapItem};
 use treetop::ui::theme::{
@@ -14,7 +14,7 @@ use treetop::ui::treemap_widget;
 fn make_items(n: usize) -> Vec<TreemapItem> {
     (0..n)
         .map(|i| TreemapItem {
-            id: i as u32 + 1,
+            pid: i as u32 + 1,
             label: format!("proc_{i}"),
             value: ((n - i) as u64 + 1) * 1024,
         })
@@ -35,7 +35,7 @@ fn make_processes(n: usize) -> Vec<ProcessInfo> {
                 cpu_percent: (i % 100) as f32,
                 user_id: Some(format!("u{}", i % 8)),
                 group_id: Some(format!("g{}", i % 4)),
-                status: "Running".to_string(),
+                status: ProcessState::Running,
                 children: Vec::new(),
                 group_name: None,
                 priority: None,

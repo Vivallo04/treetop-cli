@@ -1,6 +1,6 @@
 #[derive(Clone, Debug)]
 pub struct TreemapItem {
-    pub id: u32,
+    pub pid: u32,
     pub label: String,
     pub value: u64,
 }
@@ -45,7 +45,7 @@ impl LayoutRect {
 #[derive(Clone, Debug)]
 pub struct TreemapRect {
     pub rect: LayoutRect,
-    pub id: u32,
+    pub pid: u32,
     pub label: String,
     pub value: u64,
 }

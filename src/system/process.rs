@@ -1,6 +1,36 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::system::platform::IoStats;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProcessState {
+    Running,
+    Sleeping,
+    Stopped,
+    Zombie,
+    Idle,
+    Unknown,
+}
+
+impl ProcessState {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Running => "Running",
+            Self::Sleeping => "Sleeping",
+            Self::Stopped => "Stopped",
+            Self::Zombie => "Zombie",
+            Self::Idle => "Idle",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
+impl fmt::Display for ProcessState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.label())
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct ProcessInfo {
@@ -12,7 +42,7 @@ pub struct ProcessInfo {
     pub cpu_percent: f32,
     pub user_id: Option<String>,
     pub group_id: Option<String>,
-    pub status: String,
+    pub status: ProcessState,
     pub children: Vec<u32>,
     pub group_name: Option<String>,
     pub priority: Option<i32>,
@@ -92,7 +122,7 @@ mod tests {
                 cpu_percent: 0.0,
                 user_id: None,
                 group_id: None,
-                status: "R".into(),
+                status: ProcessState::Running,
                 children: vec![],
                 group_name: None,
                 priority: None,
@@ -107,7 +137,7 @@ mod tests {
                 cpu_percent: 0.0,
                 user_id: None,
                 group_id: None,
-                status: "R".into(),
+                status: ProcessState::Running,
                 children: vec![],
                 group_name: None,
                 priority: None,
@@ -122,7 +152,7 @@ mod tests {
                 cpu_percent: 0.0,
                 user_id: None,
                 group_id: None,
-                status: "R".into(),
+                status: ProcessState::Running,
                 children: vec![],
                 group_name: None,
                 priority: None,
@@ -137,7 +167,7 @@ mod tests {
                 cpu_percent: 0.0,
                 user_id: None,
                 group_id: None,
-                status: "R".into(),
+                status: ProcessState::Running,
                 children: vec![],
                 group_name: None,
                 priority: None,
@@ -155,5 +185,21 @@ mod tests {
         assert_eq!(sizes[&2], 75);
         assert_eq!(sizes[&3], 50);
         assert_eq!(sizes[&4], 25);
+    }
+
+    #[test]
+    fn process_state_display_round_trip() {
+        let states = [
+            (ProcessState::Running, "Running"),
+            (ProcessState::Sleeping, "Sleeping"),
+            (ProcessState::Stopped, "Stopped"),
+            (ProcessState::Zombie, "Zombie"),
+            (ProcessState::Idle, "Idle"),
+            (ProcessState::Unknown, "Unknown"),
+        ];
+        for (state, expected) in states {
+            assert_eq!(state.to_string(), expected);
+            assert_eq!(state.label(), expected);
+        }
     }
 }

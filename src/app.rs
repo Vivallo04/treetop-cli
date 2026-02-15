@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 
 use crate::action::{Action, Direction};
-use crate::config::Config;
+use crate::config::{Config, parse_key};
 use crate::format::format_bytes;
 use crate::system::collector::Collector;
 use crate::system::history::HistoryStore;
@@ -20,6 +20,111 @@ use std::collections::{HashMap, VecDeque};
 pub enum InputMode {
     Normal,
     Filter,
+    Help,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedKeybinds {
+    pub quit: KeyCode,
+    pub filter: KeyCode,
+    pub kill: KeyCode,
+    pub force_kill: KeyCode,
+    pub cycle_color: KeyCode,
+    pub cycle_theme: KeyCode,
+    pub toggle_detail: KeyCode,
+    pub zoom_in: KeyCode,
+    pub zoom_out: KeyCode,
+    pub help: KeyCode,
+    pub cycle_sort: KeyCode,
+    pub refresh: KeyCode,
+}
+
+impl ResolvedKeybinds {
+    pub fn from_config(kb: &crate::config::KeybindsConfig) -> Self {
+        Self {
+            quit: parse_key(&kb.quit).unwrap_or(KeyCode::Char('q')),
+            filter: parse_key(&kb.filter).unwrap_or(KeyCode::Char('/')),
+            kill: parse_key(&kb.kill).unwrap_or(KeyCode::Char('k')),
+            force_kill: parse_key(&kb.force_kill).unwrap_or(KeyCode::Char('K')),
+            cycle_color: parse_key(&kb.cycle_color).unwrap_or(KeyCode::Char('c')),
+            cycle_theme: parse_key(&kb.cycle_theme).unwrap_or(KeyCode::Char('t')),
+            toggle_detail: parse_key(&kb.toggle_detail).unwrap_or(KeyCode::Char('d')),
+            zoom_in: parse_key(&kb.zoom_in).unwrap_or(KeyCode::Enter),
+            zoom_out: parse_key(&kb.zoom_out).unwrap_or(KeyCode::Esc),
+            help: parse_key(&kb.help).unwrap_or(KeyCode::Char('?')),
+            cycle_sort: parse_key(&kb.cycle_sort).unwrap_or(KeyCode::Char('s')),
+            refresh: parse_key(&kb.refresh).unwrap_or(KeyCode::Char('r')),
+        }
+    }
+
+    /// Returns (key_label, description) pairs for all configurable keybinds.
+    pub fn help_entries(&self) -> Vec<(String, &'static str)> {
+        let mut entries = vec![
+            (key_label(self.quit), "Quit"),
+            (key_label(self.filter), "Filter processes"),
+            (key_label(self.kill), "Kill process (SIGTERM)"),
+            (key_label(self.force_kill), "Force kill (SIGKILL)"),
+            (key_label(self.cycle_color), "Cycle color mode"),
+            (key_label(self.cycle_theme), "Cycle theme"),
+            (key_label(self.toggle_detail), "Toggle detail panel"),
+            (key_label(self.zoom_in), "Zoom in"),
+            (key_label(self.zoom_out), "Zoom out"),
+            (key_label(self.help), "Toggle help"),
+            (key_label(self.cycle_sort), "Cycle sort mode"),
+            (key_label(self.refresh), "Refresh data"),
+        ];
+        entries.push(("↑↓←→".to_string(), "Navigate"));
+        entries.push(("Ctrl+C".to_string(), "Quit (always)"));
+        entries
+    }
+}
+
+fn key_label(code: KeyCode) -> String {
+    match code {
+        KeyCode::Char(' ') => "Space".to_string(),
+        KeyCode::Char(c) => c.to_string(),
+        KeyCode::Enter => "Enter".to_string(),
+        KeyCode::Esc => "Esc".to_string(),
+        KeyCode::Tab => "Tab".to_string(),
+        KeyCode::Backspace => "Bksp".to_string(),
+        KeyCode::Delete => "Del".to_string(),
+        _ => "?".to_string(),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortMode {
+    #[default]
+    Memory,
+    Cpu,
+    Name,
+}
+
+impl SortMode {
+    pub fn next(self) -> Self {
+        match self {
+            SortMode::Memory => SortMode::Cpu,
+            SortMode::Cpu => SortMode::Name,
+            SortMode::Name => SortMode::Memory,
+        }
+    }
+
+    #[allow(dead_code)] // Used in Step 7 (statusbar sort label)
+    pub fn label(self) -> &'static str {
+        match self {
+            SortMode::Memory => "Memory",
+            SortMode::Cpu => "CPU",
+            SortMode::Name => "Name",
+        }
+    }
+
+    pub fn from_str_config(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "cpu" => SortMode::Cpu,
+            "name" => SortMode::Name,
+            _ => SortMode::Memory,
+        }
+    }
 }
 
 pub struct App {
@@ -51,6 +156,8 @@ pub struct App {
     anim_frames: u8,
     max_visible_procs: usize,
     needs_relayout: bool,
+    pub sort_mode: SortMode,
+    pub keybinds: ResolvedKeybinds,
 }
 
 impl App {
@@ -73,6 +180,8 @@ impl App {
         let anim_frames = config.treemap.animation_frames;
         let sparkline_length = config.general.sparkline_length;
         let group_threshold = config.treemap.group_threshold;
+        let sort_mode = SortMode::from_str_config(&config.general.default_sort);
+        let keybinds = ResolvedKeybinds::from_config(&config.keybinds);
 
         App {
             running: true,
@@ -103,6 +212,8 @@ impl App {
             anim_frames,
             max_visible_procs,
             needs_relayout: true,
+            sort_mode,
+            keybinds,
         }
     }
 
@@ -187,7 +298,7 @@ impl App {
                             || p.command.to_lowercase().contains(&filter_lower))
                 })
                 .map(|p| TreemapItem {
-                    id: p.pid,
+                    pid: p.pid,
                     label: p.name.clone(),
                     value: subtree.get(&p.pid).copied().unwrap_or(p.memory_bytes),
                 })
@@ -204,7 +315,7 @@ impl App {
                             || p.command.to_lowercase().contains(&filter_lower))
                 })
                 .map(|p| TreemapItem {
-                    id: p.pid,
+                    pid: p.pid,
                     label: p.name.clone(),
                     value: p.memory_bytes,
                 })
@@ -235,7 +346,28 @@ impl App {
             items = filtered;
         }
 
-        items.sort_by(|a, b| b.value.cmp(&a.value));
+        match self.sort_mode {
+            SortMode::Memory => {
+                items.sort_by(|a, b| b.value.cmp(&a.value));
+            }
+            SortMode::Cpu => {
+                let cpu_map: HashMap<u32, f32> = self
+                    .snapshot
+                    .process_tree
+                    .processes
+                    .values()
+                    .map(|p| (p.pid, p.cpu_percent))
+                    .collect();
+                items.sort_by(|a, b| {
+                    let ca = cpu_map.get(&a.pid).copied().unwrap_or(0.0);
+                    let cb = cpu_map.get(&b.pid).copied().unwrap_or(0.0);
+                    cb.partial_cmp(&ca).unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
+            SortMode::Name => {
+                items.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+            }
+        }
 
         if self.max_visible_procs > 0 && items.len() > self.max_visible_procs {
             let small_items = items.split_off(self.max_visible_procs);
@@ -247,7 +379,7 @@ impl App {
             let max_visible_value = items.first().map(|i| i.value).unwrap_or(other_value);
             let capped_value = other_value.min(max_visible_value);
             items.push(TreemapItem {
-                id: 0,
+                pid: 0,
                 label: format!(
                     "Other ({} procs, {})",
                     other_count,
@@ -286,42 +418,91 @@ impl App {
     }
 
     pub fn map_key(&self, key: KeyEvent) -> Action {
+        // Ctrl+C always quits (hardwired safety)
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return Action::Quit;
+        }
+
         match self.input_mode {
             InputMode::Normal => self.map_key_normal(key),
             InputMode::Filter => self.map_key_filter(key),
+            InputMode::Help => self.map_key_help(key),
         }
     }
 
     fn map_key_normal(&self, key: KeyEvent) -> Action {
-        match key.code {
-            KeyCode::Char('q') => Action::Quit,
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
-            KeyCode::Char('/') => Action::EnterFilterMode,
-            KeyCode::Char('k') => {
-                if let Some(pid) = self.selected_pid() {
-                    Action::Kill(pid)
-                } else {
-                    Action::None
-                }
-            }
-            KeyCode::Char('K') => {
-                if let Some(pid) = self.selected_pid() {
-                    Action::ForceKill(pid)
-                } else {
-                    Action::None
-                }
-            }
-            KeyCode::Char('c') => Action::CycleColorMode,
-            KeyCode::Char('t') => Action::CycleTheme,
-            KeyCode::Char('d') => Action::ToggleDetailPanel,
-            KeyCode::Enter => Action::ZoomIn,
-            KeyCode::Esc => Action::ZoomOut,
-            KeyCode::Up => Action::Navigate(Direction::Up),
-            KeyCode::Down => Action::Navigate(Direction::Down),
-            KeyCode::Left => Action::Navigate(Direction::Left),
-            KeyCode::Right => Action::Navigate(Direction::Right),
-            _ => Action::None,
+        let code = key.code;
+        let kb = &self.keybinds;
+
+        // Arrow keys are hardwired (not configurable)
+        if let KeyCode::Up = code {
+            return Action::Navigate(Direction::Up);
         }
+        if let KeyCode::Down = code {
+            return Action::Navigate(Direction::Down);
+        }
+        if let KeyCode::Left = code {
+            return Action::Navigate(Direction::Left);
+        }
+        if let KeyCode::Right = code {
+            return Action::Navigate(Direction::Right);
+        }
+
+        if code == kb.quit {
+            return Action::Quit;
+        }
+        if code == kb.filter {
+            return Action::EnterFilterMode;
+        }
+        if code == kb.kill {
+            return if let Some(pid) = self.selected_pid() {
+                Action::Kill(pid)
+            } else {
+                Action::None
+            };
+        }
+        if code == kb.force_kill {
+            return if let Some(pid) = self.selected_pid() {
+                Action::ForceKill(pid)
+            } else {
+                Action::None
+            };
+        }
+        if code == kb.cycle_color {
+            return Action::CycleColorMode;
+        }
+        if code == kb.cycle_theme {
+            return Action::CycleTheme;
+        }
+        if code == kb.toggle_detail {
+            return Action::ToggleDetailPanel;
+        }
+        if code == kb.zoom_in {
+            return Action::ZoomIn;
+        }
+        if code == kb.zoom_out {
+            return Action::ZoomOut;
+        }
+        if code == kb.help {
+            return Action::ToggleHelp;
+        }
+        if code == kb.cycle_sort {
+            return Action::CycleSortMode;
+        }
+        if code == kb.refresh {
+            return Action::Refresh;
+        }
+
+        Action::None
+    }
+
+    fn map_key_help(&self, key: KeyEvent) -> Action {
+        let code = key.code;
+        // In help mode, only the help key and Esc dismiss, everything else is ignored
+        if code == self.keybinds.help || code == KeyCode::Esc {
+            return Action::ToggleHelp;
+        }
+        Action::None
     }
 
     fn map_key_filter(&self, key: KeyEvent) -> Action {
@@ -393,6 +574,20 @@ impl App {
                     let result = kill_process(self.collector.system(), pid, sysinfo::Signal::Kill);
                     self.set_kill_status(result);
                 }
+            }
+            Action::ToggleHelp => {
+                self.input_mode = if self.input_mode == InputMode::Help {
+                    InputMode::Normal
+                } else {
+                    InputMode::Help
+                };
+            }
+            Action::CycleSortMode => {
+                self.sort_mode = self.sort_mode.next();
+                self.needs_relayout = true;
+            }
+            Action::Refresh => {
+                self.refresh_data();
             }
             Action::None => {}
         }
@@ -468,12 +663,20 @@ impl App {
     }
 
     pub fn selected_pid(&self) -> Option<u32> {
-        self.layout_rects.get(self.selected_index).map(|r| r.id)
+        self.layout_rects.get(self.selected_index).map(|r| r.pid)
     }
 
     pub fn selected_process(&self) -> Option<&crate::system::process::ProcessInfo> {
         self.selected_pid()
             .and_then(|pid| self.snapshot.process_tree.processes.get(&pid))
+    }
+
+    pub fn show_help(&self) -> bool {
+        self.input_mode == InputMode::Help
+    }
+
+    pub fn help_entries(&self) -> Vec<(String, &'static str)> {
+        self.keybinds.help_entries()
     }
 
     fn set_kill_status(&mut self, result: KillResult) {
@@ -556,16 +759,16 @@ impl App {
         self.layout_rects
             .iter()
             .map(|new_rect| {
-                // Find matching old rect by id
+                // Find matching old rect by pid
                 let old = self
                     .prev_layout_rects
                     .iter()
-                    .find(|old| old.id == new_rect.id);
+                    .find(|old| old.pid == new_rect.pid);
 
                 match old {
                     Some(old_rect) => TreemapRect {
                         rect: old_rect.rect.lerp(&new_rect.rect, t),
-                        id: new_rect.id,
+                        pid: new_rect.pid,
                         label: new_rect.label.clone(),
                         value: new_rect.value,
                     },
@@ -573,5 +776,227 @@ impl App {
                 }
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::system::process::{ProcessInfo, ProcessState, ProcessTree};
+    use crate::system::snapshot::SystemSnapshot;
+    use std::collections::HashMap;
+
+    fn make_test_process(pid: u32, name: &str, memory: u64, cpu: f32) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            ppid: 0,
+            name: name.to_string(),
+            command: format!("{name} --flag"),
+            memory_bytes: memory,
+            cpu_percent: cpu,
+            user_id: Some("user".to_string()),
+            group_id: Some("group".to_string()),
+            status: ProcessState::Running,
+            children: Vec::new(),
+            group_name: None,
+            priority: None,
+            io_stats: None,
+        }
+    }
+
+    fn make_test_app_with_processes(procs: Vec<ProcessInfo>, sort_mode: SortMode) -> App {
+        let mut processes = HashMap::new();
+        for p in procs {
+            processes.insert(p.pid, p);
+        }
+        let snapshot = SystemSnapshot {
+            cpu_usage_percent: 10.0,
+            memory_total: 1_000_000_000,
+            memory_used: 500_000_000,
+            swap_total: 0,
+            swap_used: 0,
+            cpu_per_core: vec![],
+            load_average: [0.0; 3],
+            process_tree: ProcessTree { processes },
+        };
+
+        let mut app = App {
+            running: true,
+            collector: Collector::new(),
+            snapshot,
+            layout_rects: Vec::new(),
+            selected_index: 0,
+            input_mode: InputMode::Normal,
+            filter_text: String::new(),
+            show_detail_panel: false,
+            color_mode: ColorMode::ByMemory,
+            theme: Theme::from_config(
+                "vivid",
+                &HeatOverrides {
+                    low: String::new(),
+                    mid: String::new(),
+                    high: String::new(),
+                },
+                ColorSupport::Color256,
+            ),
+            color_support: ColorSupport::Color256,
+            border_style: BorderStyle::Rounded,
+            status_message: None,
+            treemap_area: None,
+            min_rect_width: 4,
+            min_rect_height: 2,
+            zoom_stack: Vec::new(),
+            history: HistoryStore::new(20),
+            cpu_history: VecDeque::new(),
+            cpu_history_capacity: 20,
+            heat_overrides: HeatOverrides {
+                low: String::new(),
+                mid: String::new(),
+                high: String::new(),
+            },
+            group_threshold: 0.0,
+            subtree_sizes: HashMap::new(),
+            prev_layout_rects: Vec::new(),
+            animation_frame: 0,
+            anim_frames: 5,
+            max_visible_procs: 0,
+            needs_relayout: true,
+            sort_mode,
+            keybinds: ResolvedKeybinds::from_config(&crate::config::KeybindsConfig::default()),
+        };
+        app.compute_layout(100, 50);
+        app
+    }
+
+    #[test]
+    fn sort_mode_cycles_through_all_variants() {
+        let mode = SortMode::Memory;
+        assert_eq!(mode.next(), SortMode::Cpu);
+        assert_eq!(mode.next().next(), SortMode::Name);
+        assert_eq!(mode.next().next().next(), SortMode::Memory);
+    }
+
+    #[test]
+    fn compute_layout_cpu_sort_orders_by_cpu_descending() {
+        // Process with less memory but higher CPU should come first in CPU sort
+        let procs = vec![
+            make_test_process(1, "low_cpu", 500_000_000, 5.0),
+            make_test_process(2, "high_cpu", 100_000_000, 90.0),
+            make_test_process(3, "mid_cpu", 300_000_000, 50.0),
+        ];
+        let app = make_test_app_with_processes(procs, SortMode::Cpu);
+
+        assert!(!app.layout_rects.is_empty());
+        let labels: Vec<&str> = app.layout_rects.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, vec!["high_cpu", "mid_cpu", "low_cpu"]);
+    }
+
+    #[test]
+    fn compute_layout_name_sort_orders_alphabetically() {
+        let procs = vec![
+            make_test_process(1, "Zebra", 100_000, 1.0),
+            make_test_process(2, "alpha", 200_000, 2.0),
+            make_test_process(3, "Beta", 300_000, 3.0),
+        ];
+        let app = make_test_app_with_processes(procs, SortMode::Name);
+
+        assert!(!app.layout_rects.is_empty());
+        let labels: Vec<&str> = app.layout_rects.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, vec!["alpha", "Beta", "Zebra"]);
+    }
+
+    #[test]
+    fn dispatch_cycle_sort_advances_mode() {
+        let procs = vec![make_test_process(1, "test", 100_000, 1.0)];
+        let mut app = make_test_app_with_processes(procs, SortMode::Memory);
+
+        assert_eq!(app.sort_mode, SortMode::Memory);
+        app.dispatch(Action::CycleSortMode);
+        assert_eq!(app.sort_mode, SortMode::Cpu);
+        app.dispatch(Action::CycleSortMode);
+        assert_eq!(app.sort_mode, SortMode::Name);
+        app.dispatch(Action::CycleSortMode);
+        assert_eq!(app.sort_mode, SortMode::Memory);
+    }
+
+    #[test]
+    fn default_keybinds_match_original_behavior() {
+        let procs = vec![make_test_process(1, "test", 100_000, 1.0)];
+        let app = make_test_app_with_processes(procs, SortMode::Memory);
+
+        // Default 'q' key should map to Quit
+        let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::Quit);
+
+        // Default '/' key should map to EnterFilterMode
+        let key = KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::EnterFilterMode);
+
+        // Default 's' should map to CycleSortMode
+        let key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::CycleSortMode);
+
+        // Default '?' should map to ToggleHelp
+        let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::ToggleHelp);
+
+        // Ctrl+C always quits
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(app.map_key(key), Action::Quit);
+
+        // Arrow keys stay hardwired
+        let key = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::Navigate(Direction::Up));
+    }
+
+    #[test]
+    fn custom_keybind_remap_works() {
+        let procs = vec![make_test_process(1, "test", 100_000, 1.0)];
+        let mut app = make_test_app_with_processes(procs, SortMode::Memory);
+
+        // Remap quit to 'x'
+        app.keybinds.quit = KeyCode::Char('x');
+
+        let key = KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::Quit);
+
+        // 'q' should now do nothing
+        let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::None);
+    }
+
+    #[test]
+    fn help_mode_blocks_other_keys() {
+        let procs = vec![make_test_process(1, "test", 100_000, 1.0)];
+        let mut app = make_test_app_with_processes(procs, SortMode::Memory);
+
+        // Enter help mode
+        app.dispatch(Action::ToggleHelp);
+        assert_eq!(app.input_mode, InputMode::Help);
+        assert!(app.show_help());
+
+        // Normal keys should be blocked in help mode
+        let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::None);
+
+        let key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::None);
+
+        // But help key dismisses
+        let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::ToggleHelp);
+
+        // Esc also dismisses
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert_eq!(app.map_key(key), Action::ToggleHelp);
+
+        // Ctrl+C still works (safety)
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(app.map_key(key), Action::Quit);
+
+        // Toggle back
+        app.dispatch(Action::ToggleHelp);
+        assert_eq!(app.input_mode, InputMode::Normal);
+        assert!(!app.show_help());
     }
 }

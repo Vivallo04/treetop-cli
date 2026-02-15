@@ -23,8 +23,13 @@ fn card_block(
     theme: &Theme,
     border_style: BorderStyle,
 ) -> Block<'static> {
+    let borders = if border_style.has_border() {
+        Borders::ALL
+    } else {
+        Borders::NONE
+    };
     Block::default()
-        .borders(Borders::ALL)
+        .borders(borders)
         .border_type(border_style.border_type())
         .border_style(Style::default().fg(theme.overlay_border))
         .title(card_title(title, theme))

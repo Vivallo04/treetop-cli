@@ -1,8 +1,21 @@
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+use sysinfo::{ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
 
 use super::platform;
-use super::process::{ProcessInfo, build_process_tree_from_flat};
+use super::process::{ProcessInfo, ProcessState, build_process_tree_from_flat};
 use super::snapshot::SystemSnapshot;
+
+fn map_process_status(status: ProcessStatus) -> ProcessState {
+    match status {
+        ProcessStatus::Run => ProcessState::Running,
+        ProcessStatus::Sleep
+        | ProcessStatus::UninterruptibleDiskSleep
+        | ProcessStatus::LockBlocked => ProcessState::Sleeping,
+        ProcessStatus::Stop | ProcessStatus::Tracing => ProcessState::Stopped,
+        ProcessStatus::Zombie | ProcessStatus::Dead => ProcessState::Zombie,
+        ProcessStatus::Idle | ProcessStatus::Parked => ProcessState::Idle,
+        _ => ProcessState::Unknown,
+    }
+}
 
 pub struct Collector {
     sys: System,
@@ -68,7 +81,7 @@ impl Collector {
 
             let user_id = process.user_id().map(|uid| format!("{uid:?}"));
             let group_id = process.group_id().map(|gid| format!("{gid:?}"));
-            let status = format!("{:?}", process.status());
+            let status = map_process_status(process.status());
 
             let info = ProcessInfo {
                 pid: pid_u32,
@@ -91,12 +104,19 @@ impl Collector {
 
         let process_tree = build_process_tree_from_flat(flat_processes);
 
+        let cpu_per_core: Vec<f32> = self.sys.cpus().iter().map(|c| c.cpu_usage()).collect();
+
+        let load_avg = System::load_average();
+        let load_average = [load_avg.one, load_avg.five, load_avg.fifteen];
+
         SystemSnapshot {
             cpu_usage_percent: self.sys.global_cpu_usage(),
             memory_total: total_memory,
             memory_used: used_memory,
             swap_total: self.sys.total_swap(),
             swap_used: self.sys.used_swap(),
+            cpu_per_core,
+            load_average,
             process_tree,
         }
     }

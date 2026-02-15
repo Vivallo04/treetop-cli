@@ -37,6 +37,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
+  cross-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+      - name: Check musl target
+        run: cargo check --target x86_64-unknown-linux-musl
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Cross check aarch64-linux
+        run: cross check --target aarch64-unknown-linux-gnu
+
   bench-compile:
     runs-on: ubuntu-latest
     steps:

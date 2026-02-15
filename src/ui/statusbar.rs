@@ -79,7 +79,15 @@ pub fn render(
             spans.extend(pill_spans("d", "Detail", theme));
             spans.extend(pill_spans("c", "Color", theme));
             spans.extend(pill_spans("t", "Theme", theme));
+            spans.extend(pill_spans("s", "Sort", theme));
+            spans.extend(pill_spans("?", "Help", theme));
             spans.extend(pill_spans("\u{2190}\u{2193}\u{2191}\u{2192}", "Nav", theme));
+            Line::from(spans)
+        }
+        InputMode::Help => {
+            let mut spans = Vec::new();
+            spans.extend(pill_spans("?", "Close Help", theme));
+            spans.extend(pill_spans("Esc", "Close Help", theme));
             Line::from(spans)
         }
     };

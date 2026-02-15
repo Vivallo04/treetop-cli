@@ -112,7 +112,7 @@ fn layout_row(
 
             results.push(TreemapRect {
                 rect: LayoutRect::new(remaining.x, y, strip_width, item_height),
-                id: item.id,
+                pid: item.pid,
                 label: item.label.clone(),
                 value: item.value,
             });
@@ -132,7 +132,7 @@ fn layout_row(
 
             results.push(TreemapRect {
                 rect: LayoutRect::new(x, remaining.y, item_width, strip_height),
-                id: item.id,
+                pid: item.pid,
                 label: item.label.clone(),
                 value: item.value,
             });
@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn single_item() {
         let items = vec![TreemapItem {
-            id: 1,
+            pid: 1,
             label: "A".into(),
             value: 100,
         }];
@@ -179,12 +179,12 @@ mod tests {
     fn two_equal_items() {
         let items = vec![
             TreemapItem {
-                id: 1,
+                pid: 1,
                 label: "A".into(),
                 value: 50,
             },
             TreemapItem {
-                id: 2,
+                pid: 2,
                 label: "B".into(),
                 value: 50,
             },
@@ -204,7 +204,7 @@ mod tests {
     fn area_conservation() {
         let items: Vec<TreemapItem> = (0..20)
             .map(|i| TreemapItem {
-                id: i,
+                pid: i,
                 label: format!("p{i}"),
                 value: (i as u64 + 1) * 100,
             })
@@ -223,7 +223,7 @@ mod tests {
     fn containment() {
         let items: Vec<TreemapItem> = (0..30)
             .map(|i| TreemapItem {
-                id: i,
+                pid: i,
                 label: format!("p{i}"),
                 value: (i as u64 + 1) * 50,
             })

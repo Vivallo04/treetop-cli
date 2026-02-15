@@ -7,6 +7,7 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)] // New variants wired in upcoming steps
 pub enum Action {
     Quit,
     Navigate(Direction),
@@ -19,6 +20,9 @@ pub enum Action {
     CycleColorMode,
     CycleTheme,
     ToggleDetailPanel,
+    ToggleHelp,
+    CycleSortMode,
+    Refresh,
     ZoomIn,
     ZoomOut,
     SelectAt(u16, u16),
