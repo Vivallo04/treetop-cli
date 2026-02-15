@@ -6,8 +6,7 @@ pub struct Platform;
 use windows_sys::Win32::{
     Foundation::CloseHandle,
     System::Threading::{
-        GetPriorityClass, GetProcessIoCounters, OpenProcess, IO_COUNTERS,
-        PROCESS_QUERY_INFORMATION,
+        GetPriorityClass, GetProcessIoCounters, IO_COUNTERS, OpenProcess, PROCESS_QUERY_INFORMATION,
     },
 };
 
