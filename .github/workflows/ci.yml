@@ -37,7 +37,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
-  cross-check:
+  musl-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,10 +49,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check musl target
         run: cargo check --target x86_64-unknown-linux-musl
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-      - name: Cross build aarch64-linux
-        run: cross build --target aarch64-unknown-linux-gnu
+
+  aarch64-check:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build aarch64-linux (native)
+        run: cargo build
+      - name: Test aarch64-linux (native)
+        run: cargo test
 
   bench-compile:
     runs-on: ubuntu-latest

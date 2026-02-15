@@ -21,27 +21,21 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive_ext: tar.gz
-            use_cross: false
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             archive_ext: tar.gz
-            use_cross: false
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             archive_ext: tar.gz
-            use_cross: true
           - os: macos-latest
             target: aarch64-apple-darwin
             archive_ext: tar.gz
-            use_cross: false
           - os: macos-latest
             target: x86_64-apple-darwin
             archive_ext: tar.gz
-            use_cross: false
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive_ext: zip
-            use_cross: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -51,15 +45,8 @@ jobs:
       - name: Install musl-tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: Install cross
-        if: matrix.use_cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-      - name: Build release binary (native)
-        if: "!matrix.use_cross"
+      - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-      - name: Build release binary (cross)
-        if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }}
       - name: Package (unix)
         if: runner.os != 'Windows'
         shell: bash
