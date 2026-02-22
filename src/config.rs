@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crossterm::event::KeyCode;
 use serde::Deserialize;
 
 #[derive(Debug, Default, Deserialize)]
@@ -8,6 +9,7 @@ pub struct Config {
     pub general: GeneralConfig,
     pub treemap: TreemapConfig,
     pub colors: ColorsConfig,
+    pub keybinds: KeybindsConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +20,7 @@ pub struct GeneralConfig {
     pub show_detail_panel: bool,
     pub sparkline_length: usize,
     pub color_support: String,
+    pub default_sort: String,
 }
 
 impl Default for GeneralConfig {
@@ -28,6 +31,7 @@ impl Default for GeneralConfig {
             show_detail_panel: false,
             sparkline_length: 60,
             color_support: "auto".to_string(),
+            default_sort: "memory".to_string(),
         }
     }
 }
@@ -73,6 +77,68 @@ impl Default for ColorsConfig {
             heat_mid: "#f97316".to_string(),
             heat_high: "#ec4899".to_string(),
         }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct KeybindsConfig {
+    pub quit: String,
+    pub filter: String,
+    pub kill: String,
+    pub force_kill: String,
+    pub cycle_color: String,
+    pub cycle_theme: String,
+    pub toggle_detail: String,
+    pub zoom_in: String,
+    pub zoom_out: String,
+    pub help: String,
+    pub cycle_sort: String,
+    pub refresh: String,
+}
+
+impl Default for KeybindsConfig {
+    fn default() -> Self {
+        KeybindsConfig {
+            quit: "q".to_string(),
+            filter: "/".to_string(),
+            kill: "k".to_string(),
+            force_kill: "K".to_string(),
+            cycle_color: "c".to_string(),
+            cycle_theme: "t".to_string(),
+            toggle_detail: "d".to_string(),
+            zoom_in: "Enter".to_string(),
+            zoom_out: "Esc".to_string(),
+            help: "?".to_string(),
+            cycle_sort: "s".to_string(),
+            refresh: "r".to_string(),
+        }
+    }
+}
+
+/// Parses a key string from config into a `KeyCode`.
+///
+/// Supports:
+/// - Single characters: `"q"`, `"/"`, `"?"`, `"K"`
+/// - Named keys: `"Enter"`, `"Esc"`, `"Tab"`, `"Backspace"`, `"Space"`
+#[allow(dead_code)] // Used in Step 5 (keybind integration)
+pub fn parse_key(s: &str) -> Option<KeyCode> {
+    // Check named keys case-insensitively first
+    match s.to_lowercase().as_str() {
+        "enter" | "return" => return Some(KeyCode::Enter),
+        "esc" | "escape" => return Some(KeyCode::Esc),
+        "tab" => return Some(KeyCode::Tab),
+        "backspace" => return Some(KeyCode::Backspace),
+        "space" => return Some(KeyCode::Char(' ')),
+        "delete" | "del" => return Some(KeyCode::Delete),
+        _ => {}
+    }
+    // For single characters, preserve case (K ≠ k)
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() == 1 {
+        Some(KeyCode::Char(chars[0]))
+    } else {
+        None
     }
 }
 
@@ -161,5 +227,59 @@ theme = "light"
         let config = load_config_from_path(&temp);
         assert_eq!(config.general.refresh_rate_ms, 2000);
         let _ = std::fs::remove_file(&temp);
+    }
+
+    #[test]
+    fn parse_key_valid_chars_and_names() {
+        assert_eq!(parse_key("q"), Some(KeyCode::Char('q')));
+        assert_eq!(parse_key("K"), Some(KeyCode::Char('K'))); // case preserved for single chars
+        assert_eq!(parse_key("/"), Some(KeyCode::Char('/')));
+        assert_eq!(parse_key("?"), Some(KeyCode::Char('?')));
+        assert_eq!(parse_key("Enter"), Some(KeyCode::Enter));
+        assert_eq!(parse_key("enter"), Some(KeyCode::Enter));
+        assert_eq!(parse_key("Esc"), Some(KeyCode::Esc));
+        assert_eq!(parse_key("escape"), Some(KeyCode::Esc));
+        assert_eq!(parse_key("Tab"), Some(KeyCode::Tab));
+        assert_eq!(parse_key("Backspace"), Some(KeyCode::Backspace));
+        assert_eq!(parse_key("Space"), Some(KeyCode::Char(' ')));
+        assert_eq!(parse_key("Delete"), Some(KeyCode::Delete));
+    }
+
+    #[test]
+    fn parse_key_invalid_returns_none() {
+        assert_eq!(parse_key(""), None);
+        assert_eq!(parse_key("CtrlA"), None);
+        assert_eq!(parse_key("nope"), None);
+        assert_eq!(parse_key("ab"), None);
+    }
+
+    #[test]
+    fn keybinds_partial_toml_uses_defaults() {
+        let toml_str = r#"
+[keybinds]
+quit = "x"
+help = "h"
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.keybinds.quit, "x");
+        assert_eq!(config.keybinds.help, "h");
+        // Others should be defaults
+        assert_eq!(config.keybinds.filter, "/");
+        assert_eq!(config.keybinds.kill, "k");
+        assert_eq!(config.keybinds.cycle_sort, "s");
+        assert_eq!(config.keybinds.zoom_in, "Enter");
+    }
+
+    #[test]
+    fn default_sort_config() {
+        let config = Config::default();
+        assert_eq!(config.general.default_sort, "memory");
+
+        let toml_str = r#"
+[general]
+default_sort = "cpu"
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.general.default_sort, "cpu");
     }
 }

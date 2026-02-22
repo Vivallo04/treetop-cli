@@ -6,6 +6,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v0.2.0)'
+        required: true
+        type: string
 
 jobs:
   build-artifacts:
@@ -17,8 +23,17 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive_ext: tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            archive_ext: tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive_ext: tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
             archive_ext: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -29,6 +44,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+      - name: Install musl-tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
       - name: Package (unix)
@@ -54,6 +72,12 @@ jobs:
   github-release:
     needs: build-artifacts
     runs-on: ubuntu-latest
+    # Only create GitHub releases for stable versions (not RC/alpha/beta) or manual triggers
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (!contains(github.ref_name, '-rc') &&
+       !contains(github.ref_name, '-alpha') &&
+       !contains(github.ref_name, '-beta'))
     steps:
       - uses: actions/download-artifact@v4
         with:

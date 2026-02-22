@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests.rs
-assertion_line: 180
 expression: output
 ---
 ┏━━━━━━━━━━━━━━━━━━┓┌──────────────────┐
-┃alpha             ┃│beta              │
-┃190.7 MB          ┃│114.4 MB          │
+┃ alpha            ┃│ beta             │
+┃ 190.7 MB         ┃│ 114.4 MB         │
 ┃                  ┃│                  │
 ┃                  ┃│                  │
 ┗━━━━━━━━━━━━━━━━━━┛└──────────────────┘

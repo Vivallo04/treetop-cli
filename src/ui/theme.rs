@@ -98,12 +98,16 @@ pub fn resolve_color_support(config: &str) -> ColorSupport {
 pub enum BorderStyle {
     Rounded,
     Thin,
+    Thick,
+    None,
 }
 
 impl BorderStyle {
     pub fn from_config_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "rounded" => BorderStyle::Rounded,
+            "thick" => BorderStyle::Thick,
+            "none" => BorderStyle::None,
             _ => BorderStyle::Thin,
         }
     }
@@ -112,7 +116,13 @@ impl BorderStyle {
         match self {
             BorderStyle::Rounded => BorderType::Rounded,
             BorderStyle::Thin => BorderType::Plain,
+            BorderStyle::Thick => BorderType::Thick,
+            BorderStyle::None => BorderType::Plain,
         }
+    }
+
+    pub fn has_border(self) -> bool {
+        !matches!(self, BorderStyle::None)
     }
 }
 
@@ -246,9 +256,9 @@ impl Theme {
             pill_key_fg: Color::Black,
             pill_desc_fg: Color::White,
             surface_bg: Color::DarkGray,
-            gauge_filled: Color::Yellow,
+            gauge_filled: Color::Rgb(103, 232, 249),
             gauge_unfilled: Color::DarkGray,
-            sparkline_color: Color::Cyan,
+            sparkline_color: Color::Rgb(251, 146, 60),
             other_group_bg: Color::Rgb(35, 40, 51),
             heat_colors: [
                 Color::Rgb(71, 85, 105),
@@ -375,9 +385,9 @@ impl Theme {
             pill_key_fg: Color::Rgb(30, 30, 46),
             pill_desc_fg: Color::Rgb(205, 214, 244),
             surface_bg: Color::Rgb(49, 50, 68),
-            gauge_filled: Color::Rgb(166, 227, 161),
+            gauge_filled: Color::Rgb(125, 211, 252),
             gauge_unfilled: Color::Rgb(69, 71, 90),
-            sparkline_color: Color::Rgb(137, 180, 250),
+            sparkline_color: Color::Rgb(251, 146, 60),
             other_group_bg: Color::Rgb(49, 50, 68),
             heat_colors: [
                 Color::Rgb(71, 85, 105),
@@ -448,7 +458,7 @@ impl Theme {
 #[derive(Clone, Debug)]
 pub struct ColoredTreemapRect {
     pub rect: crate::treemap::node::LayoutRect,
-    pub id: u32,
+    pub pid: u32,
     pub label: String,
     pub value: u64,
     pub color: Color,
@@ -458,7 +468,7 @@ impl ColoredTreemapRect {
     fn from_base(base: &TreemapRect, color: Color) -> Self {
         Self {
             rect: base.rect.clone(),
-            id: base.id,
+            pid: base.pid,
             label: base.label.clone(),
             value: base.value,
             color,
@@ -495,7 +505,7 @@ pub fn colorize_rects(
     }
 
     for rect in &mut colored {
-        if rect.id == 0 {
+        if rect.pid == 0 {
             rect.color = theme.other_group_bg;
         }
     }
@@ -511,7 +521,7 @@ fn apply_name_colors(rects: &mut [ColoredTreemapRect], process_tree: &ProcessTre
     for rect in rects.iter_mut() {
         let process_name = process_tree
             .processes
-            .get(&rect.id)
+            .get(&rect.pid)
             .map(|p| p.name.as_str())
             .unwrap_or(rect.label.as_str());
         let base_name = normalize_process_name(process_name);
@@ -547,7 +557,7 @@ fn apply_cpu_heatmap(rects: &mut [ColoredTreemapRect], process_tree: &ProcessTre
     for rect in rects.iter_mut() {
         let cpu = process_tree
             .processes
-            .get(&rect.id)
+            .get(&rect.pid)
             .map(|p| p.cpu_percent)
             .unwrap_or(0.0);
         rect.color = cpu_color(cpu, theme);
@@ -592,7 +602,7 @@ fn apply_hash_colors(
     for rect in rects.iter_mut() {
         let key = process_tree
             .processes
-            .get(&rect.id)
+            .get(&rect.pid)
             .map(&key_fn)
             .unwrap_or_default();
 
@@ -731,11 +741,11 @@ mod tests {
     use crate::system::process::{ProcessInfo, ProcessTree};
     use crate::treemap::node::LayoutRect;
 
-    fn make_rect(id: u32, value: u64) -> TreemapRect {
+    fn make_rect(pid: u32, value: u64) -> TreemapRect {
         TreemapRect {
             rect: LayoutRect::new(0.0, 0.0, 10.0, 10.0),
-            id,
-            label: format!("proc_{id}"),
+            pid,
+            label: format!("proc_{pid}"),
             value,
         }
     }
@@ -750,7 +760,7 @@ mod tests {
             cpu_percent: cpu,
             user_id: Some(format!("user_{}", pid % 3)),
             group_id: Some(format!("group_{}", pid % 2)),
-            status: "Running".to_string(),
+            status: crate::system::process::ProcessState::Running,
             children: Vec::new(),
             group_name: None,
             priority: None,
@@ -933,8 +943,28 @@ mod tests {
         ] {
             let colored =
                 colorize_rects(&rects, &tree, 1_000, mode, &theme, ColorSupport::Truecolor);
-            assert_eq!(colored[0].id, 0);
+            assert_eq!(colored[0].pid, 0);
             assert_eq!(colored[0].color, theme.other_group_bg);
         }
+    }
+
+    #[test]
+    fn border_style_thick_and_none() {
+        assert_eq!(BorderStyle::from_config_str("thick"), BorderStyle::Thick);
+        assert_eq!(BorderStyle::from_config_str("none"), BorderStyle::None);
+        assert_eq!(
+            BorderStyle::from_config_str("rounded"),
+            BorderStyle::Rounded
+        );
+        assert_eq!(BorderStyle::from_config_str("thin"), BorderStyle::Thin);
+
+        // has_border
+        assert!(BorderStyle::Rounded.has_border());
+        assert!(BorderStyle::Thin.has_border());
+        assert!(BorderStyle::Thick.has_border());
+        assert!(!BorderStyle::None.has_border());
+
+        // border_type
+        assert_eq!(BorderStyle::Thick.border_type(), BorderType::Thick);
     }
 }

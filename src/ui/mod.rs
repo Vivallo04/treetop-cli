@@ -1,5 +1,7 @@
 pub mod detail_panel;
 pub mod header;
+pub mod help;
+pub mod selection_bar;
 pub mod statusbar;
 pub mod theme;
 pub mod treemap_widget;
@@ -16,6 +18,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         .constraints([
             Constraint::Length(4),
             Constraint::Min(1),
+            Constraint::Length(1),
             Constraint::Length(1),
         ])
         .split(frame.area());
@@ -102,13 +105,27 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     );
     statusbar::render(
         frame,
-        chunks[2],
+        chunks[3],
         app.input_mode,
         &app.filter_text,
         app.status_message.as_ref(),
         &app.theme,
         app.is_zoomed(),
     );
+
+    let selected = app
+        .selected_process()
+        .map(|p| selection_bar::SelectionInfo {
+            pid: p.pid,
+            name: p.name.clone(),
+            memory_bytes: p.memory_bytes,
+        });
+    selection_bar::render(frame, chunks[2], selected, &app.theme);
+
+    // Help overlay — rendered last to appear on top
+    if app.show_help() {
+        help::render(frame, frame.area(), &app.help_entries(), &app.theme);
+    }
 }
 
 #[cfg(test)]

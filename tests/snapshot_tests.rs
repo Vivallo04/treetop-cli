@@ -1,5 +1,7 @@
 use insta::assert_debug_snapshot;
-use treetop::system::process::{ProcessInfo, ProcessTree, build_process_tree_from_flat};
+use treetop::system::process::{
+    ProcessInfo, ProcessState, ProcessTree, build_process_tree_from_flat,
+};
 
 fn mock_process(pid: u32, ppid: u32, name: &str, memory_bytes: u64) -> ProcessInfo {
     ProcessInfo {
@@ -11,7 +13,7 @@ fn mock_process(pid: u32, ppid: u32, name: &str, memory_bytes: u64) -> ProcessIn
         cpu_percent: 0.0,
         user_id: Some("tester".to_string()),
         group_id: Some("staff".to_string()),
-        status: "Running".to_string(),
+        status: ProcessState::Running,
         children: Vec::new(),
         group_name: None,
         priority: None,

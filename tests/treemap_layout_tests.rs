@@ -7,7 +7,7 @@ fn make_items(values: &[u64]) -> Vec<TreemapItem> {
         .iter()
         .enumerate()
         .map(|(i, &v)| TreemapItem {
-            id: i as u32,
+            pid: i as u32,
             value: v,
             label: format!("p{}", i),
         })
@@ -69,8 +69,8 @@ proptest! {
         let items = make_items(&values);
         let rects = squarify_for_tests(&items, &bounds);
         for r in &rects {
-            prop_assert!(r.rect.width > 0.0, "Zero width for id={}", r.id);
-            prop_assert!(r.rect.height > 0.0, "Zero height for id={}", r.id);
+            prop_assert!(r.rect.width > 0.0, "Zero width for id={}", r.pid);
+            prop_assert!(r.rect.height > 0.0, "Zero height for id={}", r.pid);
         }
     }
 

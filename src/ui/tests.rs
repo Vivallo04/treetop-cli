@@ -7,13 +7,13 @@ use ratatui::layout::Rect;
 
 use crate::app::InputMode;
 use crate::system::history::HistoryStore;
-use crate::system::process::{ProcessInfo, ProcessTree};
+use crate::system::process::{ProcessInfo, ProcessState, ProcessTree};
 use crate::system::snapshot::SystemSnapshot;
 use crate::treemap::node::LayoutRect;
 use crate::ui::theme::{
     BorderStyle, ColorMode, ColorSupport, ColoredTreemapRect, HeatOverrides, Theme,
 };
-use crate::ui::{detail_panel, header, statusbar, treemap_widget};
+use crate::ui::{detail_panel, header, selection_bar, statusbar, treemap_widget};
 
 fn buffer_to_string(buf: &ratatui::buffer::Buffer) -> String {
     let area = buf.area;
@@ -51,7 +51,7 @@ fn make_process(pid: u32, name: &str, memory: u64, cpu: f32) -> ProcessInfo {
         cpu_percent: cpu,
         user_id: Some("user".to_string()),
         group_id: Some("group".to_string()),
-        status: "Running".to_string(),
+        status: ProcessState::Running,
         children: Vec::new(),
         group_name: None,
         priority: None,
@@ -69,6 +69,8 @@ fn make_snapshot() -> SystemSnapshot {
         memory_used: 420_000_000,
         swap_total: 512_000_000,
         swap_used: 64_000_000,
+        cpu_per_core: vec![],
+        load_average: [0.0; 3],
         process_tree: ProcessTree { processes },
     }
 }
@@ -122,6 +124,52 @@ fn snapshot_statusbar() {
 }
 
 #[test]
+fn snapshot_selection_bar_empty() {
+    let output = render_to_string(80, 1, |frame| {
+        selection_bar::render(frame, Rect::new(0, 0, 80, 1), None, &make_theme());
+    });
+
+    assert_snapshot!("ui_selection_bar_empty", output);
+}
+
+#[test]
+fn snapshot_selection_bar_with_selection() {
+    let output = render_to_string(80, 1, |frame| {
+        selection_bar::render(
+            frame,
+            Rect::new(0, 0, 80, 1),
+            Some(selection_bar::SelectionInfo {
+                pid: 1,
+                name: "Brave Browser Helper".to_string(),
+                memory_bytes: 571_400_000,
+            }),
+            &make_theme(),
+        );
+    });
+
+    assert_snapshot!("ui_selection_bar_with_selection", output);
+}
+
+#[test]
+fn snapshot_selection_bar_truncation_right_memory_preserved() {
+    let output = render_to_string(24, 1, |frame| {
+        selection_bar::render(
+            frame,
+            Rect::new(0, 0, 24, 1),
+            Some(selection_bar::SelectionInfo {
+                pid: 99,
+                name: "Extremely Long Application Name With Suffix".to_string(),
+                memory_bytes: 1_234_567_890,
+            }),
+            &make_theme(),
+        );
+    });
+
+    assert!(output.ends_with("1.1 GB"));
+    assert_snapshot!("ui_selection_bar_truncation", output);
+}
+
+#[test]
 fn snapshot_detail_panel() {
     let snapshot = make_snapshot();
     let process = snapshot.process_tree.processes.get(&1).unwrap();
@@ -150,14 +198,14 @@ fn snapshot_treemap_widget() {
     let rects = vec![
         ColoredTreemapRect {
             rect: LayoutRect::new(0.0, 0.0, 20.0, 6.0),
-            id: 1,
+            pid: 1,
             label: "alpha".to_string(),
             value: 200_000_000,
             color: ratatui::style::Color::Rgb(120, 200, 140),
         },
         ColoredTreemapRect {
             rect: LayoutRect::new(20.0, 0.0, 20.0, 6.0),
-            id: 2,
+            pid: 2,
             label: "beta".to_string(),
             value: 120_000_000,
             color: ratatui::style::Color::Rgb(200, 160, 90),
@@ -185,14 +233,14 @@ fn snapshot_treemap_selected_warm_block() {
     let rects = vec![
         ColoredTreemapRect {
             rect: LayoutRect::new(0.0, 0.0, 24.0, 7.0),
-            id: 1,
+            pid: 1,
             label: "critical".to_string(),
             value: 600_000_000,
             color: ratatui::style::Color::Rgb(249, 115, 22),
         },
         ColoredTreemapRect {
             rect: LayoutRect::new(24.0, 0.0, 16.0, 7.0),
-            id: 2,
+            pid: 2,
             label: "normal".to_string(),
             value: 120_000_000,
             color: ratatui::style::Color::Rgb(16, 185, 129),
@@ -220,14 +268,14 @@ fn snapshot_treemap_other_group_present() {
     let rects = vec![
         ColoredTreemapRect {
             rect: LayoutRect::new(0.0, 0.0, 26.0, 7.0),
-            id: 0,
+            pid: 0,
             label: "Other (349 procs, 1.4 GB)".to_string(),
             value: 1_400_000_000,
             color: ratatui::style::Color::Rgb(49, 50, 68),
         },
         ColoredTreemapRect {
             rect: LayoutRect::new(26.0, 0.0, 14.0, 7.0),
-            id: 42,
+            pid: 42,
             label: "brave".to_string(),
             value: 420_000_000,
             color: ratatui::style::Color::Rgb(239, 68, 68),
@@ -248,4 +296,95 @@ fn snapshot_treemap_other_group_present() {
     });
 
     assert_snapshot!("ui_treemap_other_group", output);
+}
+
+#[test]
+fn snapshot_treemap_mixed_palette() {
+    let rects = vec![
+        ColoredTreemapRect {
+            rect: LayoutRect::new(0.0, 0.0, 18.0, 8.0),
+            pid: 1,
+            label: "brave".to_string(),
+            value: 400_000_000,
+            color: ratatui::style::Color::Rgb(96, 165, 250),
+        },
+        ColoredTreemapRect {
+            rect: LayoutRect::new(18.0, 0.0, 16.0, 8.0),
+            pid: 2,
+            label: "code".to_string(),
+            value: 360_000_000,
+            color: ratatui::style::Color::Rgb(251, 146, 60),
+        },
+        ColoredTreemapRect {
+            rect: LayoutRect::new(34.0, 0.0, 14.0, 4.0),
+            pid: 3,
+            label: "node".to_string(),
+            value: 180_000_000,
+            color: ratatui::style::Color::Rgb(45, 212, 191),
+        },
+        ColoredTreemapRect {
+            rect: LayoutRect::new(34.0, 4.0, 14.0, 4.0),
+            pid: 0,
+            label: "other".to_string(),
+            value: 140_000_000,
+            color: ratatui::style::Color::Rgb(49, 50, 68),
+        },
+    ];
+
+    let output = render_to_string(48, 8, |frame| {
+        treemap_widget::render(
+            frame,
+            Rect::new(0, 0, 48, 8),
+            &rects,
+            1,
+            6,
+            2,
+            BorderStyle::Rounded,
+            &make_theme(),
+        );
+    });
+
+    assert_snapshot!("ui_treemap_mixed_palette", output);
+}
+
+#[test]
+fn snapshot_treemap_flush_tiles() {
+    let rects = vec![
+        ColoredTreemapRect {
+            rect: LayoutRect::new(0.0, 0.0, 16.0, 8.0),
+            pid: 11,
+            label: "code".to_string(),
+            value: 300_000_000,
+            color: ratatui::style::Color::Rgb(251, 146, 60),
+        },
+        ColoredTreemapRect {
+            rect: LayoutRect::new(16.0, 0.0, 16.0, 8.0),
+            pid: 22,
+            label: "brave".to_string(),
+            value: 280_000_000,
+            color: ratatui::style::Color::Rgb(96, 165, 250),
+        },
+        ColoredTreemapRect {
+            rect: LayoutRect::new(32.0, 0.0, 16.0, 8.0),
+            pid: 33,
+            label: "node".to_string(),
+            value: 180_000_000,
+            color: ratatui::style::Color::Rgb(45, 212, 191),
+        },
+    ];
+
+    let output = render_to_string(48, 8, |frame| {
+        treemap_widget::render(
+            frame,
+            Rect::new(0, 0, 48, 8),
+            &rects,
+            1,
+            6,
+            2,
+            BorderStyle::Rounded,
+            &make_theme(),
+        );
+    });
+
+    assert_snapshot!("ui_treemap_flush_tiles", output);
 }

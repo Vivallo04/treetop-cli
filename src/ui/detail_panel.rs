@@ -17,8 +17,13 @@ pub fn render(
     border_style: BorderStyle,
     history: Option<&ProcessHistory>,
 ) {
+    let borders = if border_style.has_border() {
+        Borders::ALL
+    } else {
+        Borders::NONE
+    };
     let block = Block::default()
-        .borders(Borders::ALL)
+        .borders(borders)
         .border_type(border_style.border_type())
         .border_style(Style::default().fg(theme.overlay_border))
         .title(Span::styled(
@@ -95,7 +100,7 @@ pub fn render(
                 .unwrap_or_else(|| "N/A".to_string()),
             theme,
         ),
-        detail_line("Status", process.status.clone(), theme),
+        detail_line("Status", process.status.to_string(), theme),
         detail_line("Children", process.children.len().to_string(), theme),
     ];
 
