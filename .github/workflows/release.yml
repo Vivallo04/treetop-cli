@@ -17,28 +17,36 @@ permissions:
 jobs:
   build-artifacts:
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            archive_ext: tar.gz
+            asset_suffix: linux-x86_64-gnu
+            ext: ""
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            archive_ext: tar.gz
+            asset_suffix: linux-x86_64-musl
+            ext: ""
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            archive_ext: tar.gz
+            asset_suffix: linux-aarch64-gnu
+            ext: ""
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive_ext: tar.gz
+            asset_suffix: macos-aarch64
+            ext: ""
           - os: macos-latest
             target: x86_64-apple-darwin
-            archive_ext: tar.gz
+            asset_suffix: macos-x86_64
+            ext: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive_ext: zip
+            asset_suffix: windows-x86_64
+            ext: ".exe"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -50,25 +58,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-      - name: Package (unix)
+      - name: Prepare release binary (unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/treetop dist/
-          tar -C dist -czf treetop-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }} treetop
-      - name: Package (windows)
+          install -m 755 target/${{ matrix.target }}/release/treetop dist/treetop-${RELEASE_TAG}-${{ matrix.asset_suffix }}
+      - name: Prepare release binary (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/treetop.exe" "dist/treetop.exe"
-          Compress-Archive -Path "dist/treetop.exe" -DestinationPath "treetop-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}" -Force
+          Copy-Item "target/${{ matrix.target }}/release/treetop.exe" "dist/treetop-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.exe"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: treetop-${{ matrix.target }}
-          path: treetop-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+          name: treetop-${{ matrix.asset_suffix }}
+          path: dist/treetop-${{ env.RELEASE_TAG }}-${{ matrix.asset_suffix }}${{ matrix.ext }}
 
   github-release:
     needs: build-artifacts
@@ -83,13 +89,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: release-artifacts
+          merge-multiple: true
       - name: Build checksums
         shell: bash
         run: |
-          find release-artifacts -type f -name "*.*" -print0 | sort -z | xargs -0 sha256sum > checksums.txt
+          find release-artifacts -type f -print0 | sort -z | xargs -0 sha256sum > checksums.txt
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
           files: |
             release-artifacts/**/*
             checksums.txt
