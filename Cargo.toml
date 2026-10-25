@@ -28,7 +28,7 @@ dirs = "6.0.0"
 ratatui = "0.30.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-sysinfo = "0.38.0"
+sysinfo = "0.39.6"
 tokio = { version = "1.49.0", features = ["rt", "macros", "time", "sync"] }
 toml = "0.9.11"
 tracing = { version = "0.1.41", optional = true }

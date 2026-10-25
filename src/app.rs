@@ -348,7 +348,7 @@ impl App {
 
         match self.sort_mode {
             SortMode::Memory => {
-                items.sort_by(|a, b| b.value.cmp(&a.value));
+                items.sort_by_key(|b| std::cmp::Reverse(b.value));
             }
             SortMode::Cpu => {
                 let cpu_map: HashMap<u32, f32> = self
@@ -364,9 +364,7 @@ impl App {
                     cb.partial_cmp(&ca).unwrap_or(std::cmp::Ordering::Equal)
                 });
             }
-            SortMode::Name => {
-                items.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
-            }
+            SortMode::Name => items.sort_by_key(|a| a.label.to_lowercase()),
         }
 
         if self.max_visible_procs > 0 && items.len() > self.max_visible_procs {

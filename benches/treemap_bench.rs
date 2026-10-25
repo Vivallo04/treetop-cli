@@ -63,7 +63,7 @@ fn bench_squarify(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &items, |b, items| {
             b.iter(|| {
                 let mut sorted = black_box(items.clone());
-                sorted.sort_by(|a, b| b.value.cmp(&a.value));
+                sorted.sort_by_key(|b| std::cmp::Reverse(b.value));
                 let rects = squarify_sorted(black_box(&sorted), black_box(&bounds));
                 black_box(rects);
             })
@@ -82,7 +82,7 @@ fn bench_layout_pipeline(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &items, |b, items| {
             b.iter(|| {
                 let mut sorted = black_box(items.clone());
-                sorted.sort_by(|a, b| b.value.cmp(&a.value));
+                sorted.sort_by_key(|b| std::cmp::Reverse(b.value));
                 let rects = squarify_sorted(black_box(&sorted), black_box(&bounds));
                 black_box(rects);
             })
@@ -120,7 +120,7 @@ fn bench_treemap_widget_render(c: &mut Criterion) {
     for size in [500usize, 1000, 2000] {
         let items = make_items(size);
         let mut sorted = items.clone();
-        sorted.sort_by(|a, b| b.value.cmp(&a.value));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.value));
 
         let base_rects = squarify_sorted(&sorted, &bounds);
         let process_tree = build_process_tree_from_flat(make_processes(size));

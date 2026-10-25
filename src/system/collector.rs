@@ -35,7 +35,7 @@ impl Collector {
         sys.refresh_processes_specifics(
             ProcessesToUpdate::All,
             true,
-            ProcessRefreshKind::everything(),
+            ProcessRefreshKind::everything().without_tasks(),
         );
         Collector { sys }
     }
@@ -53,7 +53,10 @@ impl Collector {
         self.sys.refresh_processes_specifics(
             ProcessesToUpdate::All,
             true,
-            ProcessRefreshKind::nothing().with_memory().with_cpu(),
+            ProcessRefreshKind::nothing()
+                .with_memory()
+                .with_cpu()
+                .without_tasks(),
         );
         self.build_snapshot()
     }

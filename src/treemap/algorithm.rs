@@ -151,7 +151,7 @@ mod tests {
 
     fn squarify_for_tests(items: &[TreemapItem], bounds: &LayoutRect) -> Vec<TreemapRect> {
         let mut sorted = items.to_vec();
-        sorted.sort_by(|a, b| b.value.cmp(&a.value));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.value));
         squarify_sorted(&sorted, bounds)
     }
 
